@@ -1,11 +1,5 @@
 # London Property Intelligence Platform
 
-A machine learning project that predicts residential property sale prices across all 33 London boroughs, built on HM Land Registry sales data linked to Domestic Energy Performance Certificates. The trained model reaches an R squared of around 0.88 on log price when tested on genuinely unseen 2024 sales, and every prediction can be explained feature by feature using SHAP.
-
-This repository is a work in progress. The machine learning core is complete. The deployment layer, the automated retraining pipeline, and the London assistant chatbot are still to come. This README will grow as those parts are added.
-
-## What this project is
-
 Most house price models fall down because Land Registry data on its own tells you what a property sold for but not how big it is. Without floor area you cannot tell a studio apart from a penthouse in the same postcode, so the model has very little to work with. This project uses a richer dataset published by the Greater London Authority that links each Land Registry transaction to its EPC certificate, which means every property comes with its floor area and its energy rating already attached. Floor area turns out to be the single strongest driver of price, and having it changes everything.
 
 On top of that the project merges in postcode level context such as location coordinates, travel zone, deprivation index, average income, and distance to the nearest station. The result is a model that understands both the property itself and the neighbourhood around it.
