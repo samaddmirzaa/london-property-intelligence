@@ -1,2 +1,19 @@
-/data/supplementary/london_postcodes.csv
-/data/supplementary/pp-2025.csv
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Big/raw data stays local, too large for GitHub
+data/raw/
+data/processed/
+data/supplementary/*.csv
+
+# MLflow tracking artifacts
+mlflow.db
+mlruns/
+notebooks/mlruns/
+
+# IDE / OS
+.idea/
+.DS_Store

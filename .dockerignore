@@ -1,0 +1,12 @@
+notebooks/
+data/
+!data/supplementary/postcodes_london.parquet
+reports/
+streamlit/
+tests/
+mlflow.db
+mlruns/
+.git/
+__pycache__/
+*.egg-info/
+.pytest_cache/
