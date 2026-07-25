@@ -1,0 +1,13 @@
+jupyter
+ipykernel
+matplotlib
+seaborn
+scikit-learn
+xgboost
+shap
+mlflow
+joblib
+pandas
+numpy
+pyarrow
+pytest
