@@ -23,6 +23,11 @@ class PriceResponse(BaseModel):
     postcode: str
     district: str
 
+
+@app.get('/')
+def root():
+    return {'Service': 'London Property Intelligence API', 'docs': '/docs'}
+
 @app.get("/health")
 def health():
     return {'Status': 'OK'}
