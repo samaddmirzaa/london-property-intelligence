@@ -196,9 +196,6 @@ convention (below 0.1 is stable, 0.1 to 0.2 is worth watching, above 0.2 has mov
 Retraining triggers on any of three conditions: the target drifts, more than 30% of
 features drift, or a single feature exceeds PSI 0.5.
 
-**Reference sample.** A 50k row sample reproduces the PSI you get from the full 1.37M
-rows to within 0.003, so there is no reason to commit the larger file.
-
 ---
 
 ## Tech stack
@@ -236,42 +233,6 @@ The raw data files are not in the repository, since they run to several hundred
 megabytes. The GLA "House Price per Square Metre" borough files and the Doogal London
 postcode dataset are both publicly available, and notebooks 01 to 04 rebuild every
 processed file from them.
-
----
-
-## Limitations
-
-**Expensive properties are hard to predict.** Errors get noticeably worse above about
-£1.5M. At that end of the market, price depends on condition, quality of renovation,
-floor level, views and exactly which part of the street the property sits on. None of
-that is in the data. I tried three separate approaches to close the gap (a distance
-to central London feature, finer grained postcode sector encoding, and both together)
-and each one moved R² by less than 0.002. The limit here is the data, not the model.
-
-**Location is only accurate to postcode level.** Every property sharing a postcode
-gets the same coordinates, so the model cannot tell a flat above a busy road from one
-on a quiet square fifty metres away. Geocoding individual addresses would fix this and
-is the most likely route to a meaningfully better model.
-
-**The training sample is biased.** The GLA dataset is an inner join, so any property
-without an EPC certificate simply is not in it. Since EPCs only became compulsory for
-sales in 2008, and since a property only gets one when it is marketed, homes that have
-stayed in the same hands for decades are under represented.
-
-**Energy efficiency does not predict price, and the reason is interesting.** EPC
-rating correlates slightly negatively with price in this data, which looks wrong until
-you account for construction age. Period properties are expensive and draughty. New
-builds are efficient and cheaper. Age drives both, so the apparent relationship
-between efficiency and price is an artefact. Energy features were dropped from the
-model after ablation confirmed they contribute nothing.
-
-**The retrain step is a stub.** Drift detection and the conditional branching work
-properly and run on real data. The retrain job logs what triggered it rather than
-actually training, because the 1.4M row training set is too large to keep in version
-control. A production setup would pull it from object storage at that point.
-
-**Postcode coverage.** Predictions work for the roughly 332,000 London postcodes in
-the reference file.
 
 ---
 
