@@ -17,8 +17,8 @@ sales that were held out of training entirely.
 
 | Demo | Link |
 |---|---|
-| Interactive map | [YOUR_MAP_URL](https://samaddmirzaa-london-property-intelligen-streamlitmap-app-x55hkl.streamlit.app/) |
-| Price predictor | [YOUR_APP_URL](https://samaddmirzaa-london-property-intelligence-streamlitapp-xwgple.streamlit.app/) |
+| Interactive map | [Streamlit Map](https://samaddmirzaa-london-property-intelligen-streamlitmap-app-x55hkl.streamlit.app/) |
+| Price predictor | [App](https://samaddmirzaa-london-property-intelligence-streamlitapp-xwgple.streamlit.app/) |
 | API documentation | [london-property-api.onrender.com/docs](https://london-property-api.onrender.com/docs) |
 
 The API runs on Render's free tier, which shuts the service down after 15 minutes of
