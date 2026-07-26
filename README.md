@@ -11,6 +11,8 @@ transactions and deployed as a live API with automated testing and drift monitor
 The model scores R² 0.89 on raw prices with a £47k median error, measured on 2024
 sales that were held out of training entirely.
 
+![London price map](reports/figures/map_ss.png)
+
 ---
 
 ## Live demos
