@@ -8,7 +8,7 @@
 A house price model for London, trained on 1.4 million EPC-linked Land Registry
 transactions and deployed as a live API with automated testing and drift monitoring.
 
-The model scores **R² 0.89 on raw prices with a £47k median error**, measured on 2024
+The model scores R² 0.89 on raw prices with a £47k median error, measured on 2024
 sales that were held out of training entirely.
 
 ---
@@ -33,10 +33,7 @@ You give it a London postcode plus a few details about a property (floor area, t
 tenure, construction year) and it estimates the sale price.
 
 The training data comes from the Greater London Authority, who matched HM Land
-Registry Price Paid records against Domestic EPC certificates by address. That
-linkage is what makes the project work, because it supplies floor area on every
-transaction. Raw Land Registry data has the sale price but no indication of how big
-the property is, which puts a hard ceiling on how well any model can do.
+Registry Price Paid records against Domestic EPC certificates by address. 
 
 Around the model sits the infrastructure you would need to actually run it: a
 validated REST API, a Docker container, experiment tracking, a test suite that runs
@@ -47,9 +44,6 @@ stale.
 
 ## Results
 
-The test set is 40,509 transactions from 2024. The model never saw them during
-training, and it never saw any 2024 data at all.
-
 | Metric | Value |
 |---|---|
 | R² (log price) | 0.88 |
@@ -57,8 +51,7 @@ training, and it never saw any 2024 data at all.
 | Median absolute error | £46,972 |
 | Mean absolute error | £91,446 |
 
-The gap between the median and the mean is worth explaining. Half of all properties
-are predicted within £47k of their actual sale price. The mean is nearly double that
+Half of all properties are predicted within £47k of their actual sale price. The mean is nearly double that
 because a handful of multi-million pound sales produce very large absolute errors and
 drag the average up. Quoting only the mean would make the model look worse than it is
 for typical properties, and quoting only the median would hide a real weakness.
@@ -67,16 +60,16 @@ for typical properties, and quoting only the median would hide a real weakness.
 
 | Price decile | Median price | Median error | Error % |
 |---|---|---|---|
-| 1 | £X | £X | X% |
-| 2 | £X | £X | X% |
-| 3 | £X | £X | X% |
-| 4 | £X | £X | X% |
-| 5 | £X | £X | X% |
-| 6 | £X | £X | X% |
-| 7 | £X | £X | X% |
-| 8 | £X | £X | X% |
-| 9 | £X | £X | X% |
-| 10 | £X | £X | X% |
+| 1 | £245000 | £29078 | 12% |
+| 2 | £330000 | £28515 | 9% |
+| 3 | £390000 | £29460 | 8% |
+| 4 | £440000 | £30824 | 7% |
+| 5 | £495000 | £38376 | 8% |
+| 6 | £555000 | £45410 | 8% |
+| 7 | £625250 | £54686 | 9% |
+| 8 | £750000 | £72113 | 10% |
+| 9 | £935000 | £101766 | 11% |
+| 10 | £1575000 | £212895 | 14% |
 
 Accuracy holds up well through the bulk of the market and falls off at the top end,
 where price depends on things the data cannot see.
@@ -193,7 +186,7 @@ duration       PSI = 0.000   stable
 Decision: RETRAIN, target (price) drifted, PSI 0.262
 ```
 
-The geography is unchanged, which makes sense: London is still London, the same
+The geography is unchanged as London is still London, the same
 postcodes with the same deprivation scores and the same stations. Prices are a
 different story. The 2025 median sits well above what the model was trained on, and
 that is exactly the situation where predictions start drifting low.
