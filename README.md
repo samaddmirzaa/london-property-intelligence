@@ -1,3 +1,5 @@
+![Tests](https://github.com/samaddmirzaa/london-property-intelligence/actions/workflows/tests.yml/badge.svg)
+
 # London Property Intelligence 
 
 This project uses a dataset published by the Greater London Authority that links each Land Registry transaction to its EPC certificate, which means every property comes with its floor area and its energy rating attached. 
