@@ -141,9 +141,8 @@ market sales. Floor areas outside 15 to 500 m² go for the same reason.
 **Features.** Eighteen in total. Log floor area, number of rooms, construction year,
 one-hot encoded property type and tenure, year and month of sale. Then everything
 derived from the postcode: latitude, longitude, travel zone, deprivation index,
-average income, distance to the nearest station. Finally a smoothed target encoding
-of the postcode district, which turns out to be the second most important feature in
-the model.
+average income, distance to the nearest station. Finally, a smoothed target encoding
+of the postcode district.
 
 **Validation.** Split by time, not at random. London prices roughly doubled over the
 period the data covers, so a random split would let the model see 2024 price levels
@@ -151,7 +150,7 @@ while training and then reward it for "predicting" them. That inflates the score
 tells you nothing about how the model would behave on genuinely new data. Training
 runs on everything up to 2023 and the model is tested on 2024.
 
-**Leakage control.** Target encoding uses the thing you are trying to predict, so it
+**Leakage control.** Target encoding uses the thing we are trying to predict, so it
 has to be handled carefully. The district averages are computed on training rows
 only, then applied to the test set as a lookup. They are also smoothed toward the
 global mean, so a district with three sales does not get an extreme value the model
