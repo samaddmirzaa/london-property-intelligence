@@ -1,0 +1,53 @@
+name: Drift Detection
+
+on:
+  push:
+    paths:
+      - 'data/drift/**'
+  workflow_dispatch:
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    outputs:
+      retrain: ${{ steps.check.outputs.retrain }}
+      reason: ${{ steps.check.outputs.reason }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pandas numpy pyarrow
+          pip install -e .
+
+      - name: Run drift detection
+        id: check
+        run: python -m london_property.drift | tee drift_output.txt
+
+      - name: Write report to summary
+        run: |
+          echo '## Drift Detection Report' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat drift_output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload drift report
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report
+          path: drift_report.json
+
+  retrain:
+    needs: drift
+    if: needs.drift.outputs.retrain == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Retrain triggered
+        run: |
+          echo "Retrain triggered: ${{ needs.drift.outputs.reason }}"
