@@ -11,8 +11,6 @@ transactions and deployed as a live API with automated testing and drift monitor
 The model scores R² 0.89 on raw prices with a £47k median error, measured on 2024
 sales that were held out of training entirely.
 
-![London price map](reports/figures/map_ss.png)
-
 ---
 
 ## Live demos
@@ -26,6 +24,8 @@ sales that were held out of training entirely.
 The API runs on Render's free tier, which shuts the service down after 15 minutes of
 inactivity. If nobody has used it recently, the first request takes 30 to 60 seconds
 while the container starts up. Later requests are fast.
+
+![London price map](reports/figures/map_ss.png)
 
 ---
 
