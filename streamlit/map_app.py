@@ -52,7 +52,7 @@ ptype = st.sidebar.selectbox('Type', property_types)
 tenure = st.sidebar.radio('Tenure', tenures)
 built = st.sidebar.slider('Construction Year', 1900, 2024, 1960)
 
-carto_key = st.secrets['cb1_41wd_1_797e16af0b84012bdaa478c9']
+carto_key = st.secrets['CARTO_KEY']
 
 # Base map centred on London
 london_map = folium.Map(
