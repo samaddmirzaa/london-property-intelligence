@@ -83,10 +83,13 @@ map_data = st_folium(london_map, height=500, width=None,
 
 # A click causes a rerun store the coordinates so they persist.
 if map_data and map_data.get('last_clicked'):
-    st.session_state.clicked = (
+    new_click = (
         map_data['last_clicked']['lat'],
         map_data['last_clicked']['lng'],
     )
+    if st.session_state.get('clicked') != new_click:
+        st.session_state.clicked = new_click
+        st.rerun()
 
 # If we have a location, snap it to the nearest postcode and ask the API
 if 'clicked' in st.session_state:
