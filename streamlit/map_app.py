@@ -52,15 +52,18 @@ ptype = st.sidebar.selectbox('Type', property_types)
 tenure = st.sidebar.radio('Tenure', tenures)
 built = st.sidebar.slider('Construction Year', 1900, 2024, 1960)
 
+carto_key = st.secrets['CARTO_KEY']
+
 # Base map centred on London
 london_map = folium.Map(
     location=[51.5074, -0.1278],
     zoom_start=11,
-    tiles='cartodbvoyager',
+    tiles=f'https://{{s}}.basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}.png?key={carto_key}',
+    attr='&copy; OpenStreetMap contributors &copy; CARTO',
+    subdomains='abcd',
     min_zoom=10,
     max_zoom=15,
 )
-
 # The map is rebuilt from scratch on every rerun, so the marker must be redrawn from session state
 if 'clicked' in st.session_state:
     lat, lon = st.session_state.clicked
@@ -80,10 +83,13 @@ map_data = st_folium(london_map, height=500, width=None,
 
 # A click causes a rerun store the coordinates so they persist.
 if map_data and map_data.get('last_clicked'):
-    st.session_state.clicked = (
+    new_click = (
         map_data['last_clicked']['lat'],
         map_data['last_clicked']['lng'],
     )
+    if st.session_state.get('clicked') != new_click:
+        st.session_state.clicked = new_click
+        st.rerun()
 
 # If we have a location, snap it to the nearest postcode and ask the API
 if 'clicked' in st.session_state:
