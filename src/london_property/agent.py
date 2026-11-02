@@ -121,16 +121,19 @@ def make_tools(area):
     }
 
 
-def make_llm():
+def make_llm(model=model_name, effort=reasoning_effort, usage=None):
     """A function that sends the conversation to Groq and returns the LLM's next message.
-    The agent only ever calls this function, so changing provider means rewriting only this."""
+    The agent only ever calls this function, so changing provider means rewriting only this.
+    usage: an optional list that collects the tokens of every call, for evaluation and monitoring."""
     client = Groq(timeout=30, max_retries=1)  # reads the GROQ_API_KEY environment variable
 
     def llm(messages):
         response = client.chat.completions.create(
-            model=model_name, messages=messages, tools=tool_schemas,
-            reasoning_effort=reasoning_effort, include_reasoning=False,
+            model=model, messages=messages, tools=tool_schemas,
+            reasoning_effort=effort, include_reasoning=False,
         )
+        if usage is not None:
+            usage.append(response.usage.total_tokens)
         return response.choices[0].message
 
     return llm
