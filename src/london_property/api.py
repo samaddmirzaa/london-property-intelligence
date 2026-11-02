@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from london_property.model import load_bundle, load_postcodes, find_postcode, predict_price
 from london_property.tools import (
-    PostcodeNotFound, load_area_data, get_area_profile, find_nearby, council_tax, stamp_duty
+    PostcodeNotFound, load_area_data, get_area_profile, get_neighbourhood, find_nearby, council_tax, stamp_duty
 )
 
 app = FastAPI(title='London Property Intelligence API')
@@ -74,6 +74,10 @@ def area_profile(postcode: str):
     """Location facts, ward profile and London averages for a postcode."""
     return run_tool(get_area_profile, area, postcode)
 
+@app.get('/neighbourhood/{postcode}')
+def neighbourhood(postcode: str):
+    """One-call overview: location facts, ward and borough vs London, 10-minute walk, nearest essentials."""
+    return run_tool(get_neighbourhood, area, postcode)
 
 @app.get('/nearby/{postcode}')
 def nearby(postcode: str,

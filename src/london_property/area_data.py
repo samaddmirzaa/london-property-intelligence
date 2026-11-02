@@ -8,6 +8,7 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 from scipy.spatial import cKDTree
+from london_property.tools import count_by_type, walk_m
 
 project_root = Path(__file__).resolve().parents[2]
 raw = project_root/'data'/'raw'
@@ -305,6 +306,13 @@ def build_points(pc, wards):
     points['lat'] = lonlat.y.round(6)
     return points
 
+def build_walk_benchmark(pc, points, n=5000):
+    """Place counts within a 10-minute walk of a random sample of London postcodes: the yardstick
+    the chatbot uses to say how busy a location is compared with the rest of London."""
+    tree = cKDTree(points[['easting', 'northing']].to_numpy())
+    sample = pc.sample(n, random_state=42)
+    counts = [count_by_type(points, tree, x, y, walk_m) for x, y in zip(sample['easting'], sample['northing'])]
+    return pd.DataFrame(counts).reset_index(drop=True)
 
 def main():
     """Build all three tables and save them to data/processed/area."""
@@ -315,11 +323,14 @@ def main():
     pc = build_postcodes()
     profile = build_ward_profile(pc, wards, lookup)
     points = build_points(pc, wards)
+    walk_benchmark = build_walk_benchmark(pc, points)
 
     pc.to_parquet(out_dir/'postcodes.parquet', index=False)
     profile.reset_index().to_parquet(out_dir/'ward_profile.parquet', index=False)
     points.to_parquet(out_dir/'points.parquet', index=False)
-    print(f'postcodes: {pc.shape}, ward_profile: {profile.shape}, points: {points.shape}')
+    walk_benchmark.to_parquet(out_dir/'walk_benchmark.parquet', index=False)
+    print(f'postcodes: {pc.shape}, ward_profile: {profile.shape}, points: {points.shape}, '
+          f'walk_benchmark: {walk_benchmark.shape}')
 
 
 if __name__ == '__main__':

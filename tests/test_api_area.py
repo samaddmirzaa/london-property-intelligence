@@ -15,6 +15,11 @@ def test_area_unknown_postcode():
     assert response.status_code == 404
     assert 'not a live London postcode' in response.json()['detail']
 
+def test_neighbourhood():
+    response = client.get('/neighbourhood/N16 0UD')
+    assert response.status_code == 200
+    assert response.json()['within_10_min_walk']['cafe']['count'] > 0
+    assert client.get('/neighbourhood/ZZ69 69ZZ').status_code == 404
 
 def test_nearby():
     response = client.get('/nearby/N16 0UD', params={'type': 'school', 'subtype': 'primary', 'limit': 3})

@@ -21,6 +21,9 @@ def profile():
 def points():
     return pd.read_parquet(area_dir/'points.parquet')
 
+@pytest.fixture(scope='module')
+def walk_benchmark():
+    return pd.read_parquet(area_dir/'walk_benchmark.parquet')
 
 def test_postcodes_cover_london(postcodes):
     assert len(postcodes) > 170_000
@@ -62,3 +65,8 @@ def test_points_valid(points):
                 'pub or bar', 'gym', 'dentist', 'takeaway', 'bank', 'pharmacy', 'childcare',
                 'library', 'cinema', 'theatre'}
     assert set(points['type']) == expected
+
+def test_walk_benchmark_valid(walk_benchmark, points):
+    assert len(walk_benchmark) == 5000
+    assert set(walk_benchmark.columns) == set(points['type'])
+    assert (walk_benchmark >= 0).all().all()
