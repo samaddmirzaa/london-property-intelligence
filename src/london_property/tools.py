@@ -21,12 +21,17 @@ max_radius_m = 3000
 walk_m = 800    # a 10-minute walk at about 80 metres a minute
 
 # Ward measures compared with every other London ward, and borough measures compared with London
-rank_cols = ['crime_total', 'crime_burglary', 'crime_robbery', 'crime_theft', 'crime_violence_against_the_person',
-             'crime_vehicle_offences', 'crime_public_order_offences', 'crime_arson_and_criminal_damage',
-             'crime_drug_offences', 'crime_sexual_offences', 'crime_possession_of_weapons',
-             'crime_miscellaneous_crimes_against_society',
+# The crime breakdown is ranked too, but kept out of the high/low lists so that 11 crime types can't
+# crowd out everything else.
+crime_types = ['crime_burglary', 'crime_robbery', 'crime_theft', 'crime_violence_against_the_person',
+               'crime_vehicle_offences', 'crime_public_order_offences', 'crime_arson_and_criminal_damage',
+               'crime_drug_offences', 'crime_sexual_offences', 'crime_possession_of_weapons',
+               'crime_miscellaneous_crimes_against_society']
+rank_cols = ['crime_total', *crime_types,
              'pct_age_0_14', 'pct_age_15_29', 'pct_age_30_44', 'pct_age_45_64', 'pct_age_65_plus',
-             'pct_owned', 'pct_social_rented', 'pct_private_rented', 'ptal_ai', 'no2', 'pm25', 'pm10']
+             'pct_owned', 'pct_social_rented', 'pct_private_rented']
+# Transport access and air quality at the exact postcode, compared with every London postcode
+location_cols = ['ptal_ai', 'no2', 'pm25', 'pm10']
 borough_cols = ['price_avg', 'price_change_12m', 'price_flat', 'price_terraced', 'price_semi', 'price_detached',
                 'rent_avg', 'rent_change_12m', 'rent_1bed', 'rent_2bed', 'rent_3bed', 'rent_4bed_plus',
                 'council_tax_band_d']
@@ -75,6 +80,11 @@ def count_by_type(points, tree, easting, northing, radius_m):
     near = points.iloc[tree.query_ball_point([easting, northing], r=radius_m)]
     return near.drop_duplicates(['type', 'id'])['type'].value_counts().reindex(place_types, fill_value=0)
 
+def london_percentile(table, row):
+    """Where each value in row sits within the same column of table, from 0 to 100 (50 = typical).
+    Equal values count half, so a common value such as 0 cinemas lands mid-table; missing values are ignored."""
+    below = table.lt(row).sum() + table.eq(row).sum() / 2
+    return (below / table.count()).mul(100).round().where(row.notna()).astype('Int64')
 
 def normalise_postcode(text):
     """'e83rl' or ' e8 3rl ' -> 'E8 3RL'. The last three characters are always the inward code."""
@@ -123,21 +133,35 @@ def find_nearby(data, postcode, place_type, radius_m=1000, limit=5, subtype=None
 
 
 def get_neighbourhood(data, postcode):
-    """A one-call overview of a postcode for the chatbot: location facts, the ward and borough compared
-    with London, what is within a 10-minute walk compared with all of London, and the nearest essentials."""
+    """A one-call overview of a postcode for the chatbot: location facts, what is unusually high or low,
+    the postcode, ward and borough compared with London, what is within a 10-minute walk compared with
+    all of London, and the nearest essentials."""
     key, pc = lookup_postcode(data, postcode)
     ward = data.profile.loc[pc['ward_code']]
     ldn = data.profile.loc[london]
     others = data.profile.drop(index=london)
 
-    higher = (others[rank_cols] < ward[rank_cols].astype(float)).mean().mul(100).round()
-    higher = higher.where(ward[rank_cols].notna()).astype('Int64')
-    ward_vs_london = pd.DataFrame({'ward': ward[rank_cols], 'london': ldn[rank_cols], 'higher_than_pct_of_wards': higher})
-    borough_vs_london = pd.DataFrame({'borough': ward[borough_cols], 'london': ldn[borough_cols]})
+    ward_values = ward[rank_cols].astype(float)
+    ward_pct = london_percentile(others[rank_cols], ward_values)
+    ward_vs_london = pd.DataFrame({'ward': ward_values, 'london': ldn[rank_cols], 'london_percentile': ward_pct})
+
+    borough, ldn_borough = ward[borough_cols].astype(float), ldn[borough_cols].astype(float)
+    diff_pct = (borough / ldn_borough - 1).mul(100).round().drop(['price_change_12m', 'rent_change_12m'])
+    borough_vs_london = pd.DataFrame({'borough': borough, 'london': ldn_borough, 'diff_pct': diff_pct})
+
+    here = pc[location_cols].astype(float)
+    here_pct = london_percentile(data.postcodes[location_cols], here)
+    here_vs_london = pd.DataFrame({'here': here, 'london': ldn[location_cols], 'london_percentile': here_pct})
 
     counts = count_by_type(data.points, data.tree, pc['easting'], pc['northing'], walk_m)
-    beats = (data.walk_benchmark < counts).mean().mul(100).round().astype(int)
-    walk = pd.DataFrame({'count': counts, 'more_than_pct_of_london_postcodes': beats})
+    walk_pct = london_percentile(data.walk_benchmark, counts)
+    walk = pd.DataFrame({'count': counts, 'london_percentile': walk_pct})
+
+    ranks = pd.concat([ward_pct.drop(crime_types).rename(lambda c: f'{c} (ward)'),
+                       here_pct.rename(lambda c: f'{c} (this postcode)'),
+                       walk_pct.rename(lambda c: f'{c} (10-min walk)')]).dropna()
+    high = ranks[ranks >= 80].sort_values(ascending=False).head(8)
+    low = ranks[ranks <= 20].sort_values().head(8)
 
     nearest = {}
     for label, (place_type, subtype) in essentials.items():
@@ -146,15 +170,18 @@ def get_neighbourhood(data, postcode):
 
     return {
         'postcode': key,
-        'location': to_plain(pc.drop(['lat', 'lon', 'easting', 'northing', 'lsoa_code', 'ward_code', 'borough_code'])),
-        'ward': to_plain(ward[['ward_name', 'borough_name', 'population', 'households', 'ptal_band',
+        'location': to_plain(pc.drop(['lat', 'lon', 'easting', 'northing', 'lsoa_code', 'ward_code', 'borough_code',
+                                      *location_cols])),
+        'ward': to_plain(ward[['ward_name', 'borough_name', 'population', 'households',
                                'crime_months', 'price_month', 'rent_month']]),
+        'higher_than_most_of_london': to_plain(high),
+        'lower_than_most_of_london': to_plain(low),
+        'here_vs_london': to_plain(here_vs_london),
         'ward_vs_london': to_plain(ward_vs_london),
         'borough_vs_london': to_plain(borough_vs_london),
         'within_10_min_walk': to_plain(walk),
         'nearest': nearest,
     }
-
 
 def council_tax(data, postcode, band):
     """Annual council tax for a band (A-H) in the postcode's borough, 2026-27."""
@@ -179,14 +206,18 @@ def stamp_duty(price, first_time_buyer=False, additional_property=False, non_uk_
         bands = [(125_000, 0.00), (250_000, 0.02), (925_000, 0.05), (1_500_000, 0.10), (math.inf, 0.12)]
     surcharge = 0.05 * additional_property + 0.02 * non_uk_resident
 
-    tax, lower = 0.0, 0
+    tax, lower, breakdown = 0.0, 0, []
     for upper, rate in bands:
         if price > lower:
-            tax += (min(price, upper) - lower) * (rate + surcharge)
+            band_tax = (min(price, upper) - lower) * (rate + surcharge)
+            breakdown.append({'from': lower, 'to': min(price, upper), 'rate_pct': round((rate + surcharge) * 100),
+                              'tax': round(band_tax)})
+            tax += band_tax
         lower = upper
 
     tax = math.floor(tax)
     return {
         'price': price, 'stamp_duty': tax, 'effective_rate_pct': round(tax / price * 100, 2),
         'first_time_buyer_relief': first_time_buyer and price <= 500_000,
+        'rates_from': '1 April 2025', 'bands': breakdown,
     }

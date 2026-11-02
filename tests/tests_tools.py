@@ -1,7 +1,8 @@
 import pytest
+import pandas as pd
 
 from london_property.tools import (
-    load_area_data, normalise_postcode, get_area_profile, get_neighbourhood, find_nearby, council_tax, stamp_duty,
+    load_area_data, normalise_postcode, get_area_profile, get_neighbourhood, london_percentile, find_nearby, council_tax, stamp_duty,
     place_types, walk_m
 )
 
@@ -49,16 +50,18 @@ def test_neighbourhood(data):
     walk = result['within_10_min_walk']
     assert set(walk) == set(place_types)
     assert walk['cafe']['count'] == find_nearby(data, 'N16 0UD', 'cafe', radius_m=walk_m)['count']
-    assert all(0 <= v['more_than_pct_of_london_postcodes'] <= 100 for v in walk.values())
-    assert 0 <= result['ward_vs_london']['crime_total']['higher_than_pct_of_wards'] <= 100
+    assert all(0 <= v['london_percentile'] <= 100 for v in walk.values())
+    assert 0 <= result['ward_vs_london']['crime_total']['london_percentile'] <= 100
+    assert 0 <= result['here_vs_london']['no2']['london_percentile'] <= 100
+    assert all(pct >= 80 for pct in result['higher_than_most_of_london'].values())
+    assert all(pct <= 20 for pct in result['lower_than_most_of_london'].values())
     nearest = find_nearby(data, 'N16 0UD', 'school', radius_m=3000, limit=1, subtype='primary')['nearest'][0]
     assert result['nearest']['primary school']['name'] == nearest['name']
-
 
 def test_neighbourhood_city_of_london(data):
     result = get_neighbourhood(data, 'EC2V 7HH')
     assert result['ward_vs_london']['crime_total']['ward'] is None
-    assert result['ward_vs_london']['crime_total']['higher_than_pct_of_wards'] is None
+    assert result['ward_vs_london']['crime_total']['london_percentile'] is None
 
 def test_council_tax(data):
     band_d = council_tax(data, 'N16 0UD', 'D')['annual_bill']
@@ -77,3 +80,14 @@ def test_council_tax(data):
 ])
 def test_stamp_duty(price, ftb, additional, expected):
     assert stamp_duty(price, first_time_buyer=ftb, additional_property=additional)['stamp_duty'] == expected
+
+def test_london_percentile():
+    table = pd.DataFrame({'a': [1, 2, 3, 4, 5], 'b': [0, 0, 0, 0, 5], 'c': [1, None, 2, 3, None]})
+    row = pd.Series({'a': 5.0, 'b': 0.0, 'c': 2.0})
+    assert london_percentile(table, row).tolist() == [90, 40, 50]
+
+
+def test_stamp_duty_bands():
+    result = stamp_duty(650_000, additional_property=True, non_uk_resident=True)
+    assert [b['rate_pct'] for b in result['bands']] == [7, 9, 12]
+    assert sum(b['tax'] for b in result['bands']) == result['stamp_duty'] == 68_000

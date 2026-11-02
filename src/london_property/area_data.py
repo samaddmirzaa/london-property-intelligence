@@ -62,21 +62,28 @@ def school_level(low, high):
     return 'all-through'
 
 
+def uk_date(text):
+    """'11/10/2023' (Ofsted's day-first format) -> '11 Oct 2023', which no reader can misread as 10 November."""
+    d = pd.to_datetime(text, format='%d/%m/%Y')
+    return f'{d.day} {d:%b %Y}'
+
+
 def ofsted_summary(r):
     """Every Ofsted inspection type a school has, each with its date."""
     found = []
     if pd.notna(r['Inclusion']):
         grades = ', '.join(f'{c}: {r[c]}' for c in report_cols)
-        found.append(f"Report card ({r['Inspection start date']}): {grades}, Safeguarding: {r['Safeguarding standards']}")
+        found.append(f"Report card ({uk_date(r['Inspection start date'])}): {grades}, "
+                     f"Safeguarding: {r['Safeguarding standards']}")
     overall = r['Latest OEIF overall effectiveness']
     if pd.notna(overall):
         quality = str(r['Latest OEIF quality of education']).split('.')[0]
-        found.append(f"Graded inspection ({r['Inspection start date of latest OEIF graded inspection']}): "
+        found.append(f"Graded inspection ({uk_date(r['Inspection start date of latest OEIF graded inspection'])}): "
                      f"{grade.get(overall, overall)} overall, quality of education {grade.get(quality, quality)}")
     if pd.notna(r['Ungraded inspection overall outcome']):
-        found.append(f"Ungraded inspection ({r['Date of latest ungraded inspection']}): {r['Ungraded inspection overall outcome']}")
+        found.append(f"Ungraded inspection ({uk_date(r['Date of latest ungraded inspection'])}): "
+                     f"{r['Ungraded inspection overall outcome']}")
     return ' | '.join(found) or 'Not yet inspected'
-
 
 def school_info(r):
     """One readable sentence about a school for the chatbot."""

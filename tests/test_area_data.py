@@ -70,3 +70,6 @@ def test_walk_benchmark_valid(walk_benchmark, points):
     assert len(walk_benchmark) == 5000
     assert set(walk_benchmark.columns) == set(points['type'])
     assert (walk_benchmark >= 0).all().all()
+
+def test_school_dates_unambiguous(points):
+    assert not points['info'].str.contains(r'\d{2}/\d{2}/\d{4}').any()
