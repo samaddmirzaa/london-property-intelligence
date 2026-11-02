@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from london_property.agent import chat, make_tools, tool_schemas, max_rounds, system_prompt
+from london_property.agent import chat, make_tools, tool_schemas, max_rounds, max_history, system_prompt
 from london_property.tools import load_area_data, place_types
 
 
@@ -73,3 +73,9 @@ def test_schemas_match_tools(tools):
     assert [s['function']['name'] for s in tool_schemas] == list(tools)
     nearby = tool_schemas[1]['function']['parameters']['properties']
     assert nearby['place_type']['enum'] == place_types
+
+def test_only_recent_history_is_sent(tools):
+    llm, seen = scripted_llm(answer('Fine.'))
+    history = [{'role': 'user' if i % 2 == 0 else 'assistant', 'content': f'message {i}'} for i in range(9)]
+    chat(history, tools, llm)
+    assert seen[0][1:] == history[-max_history:]

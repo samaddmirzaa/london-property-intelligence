@@ -1,8 +1,12 @@
+import logging
+from functools import cache
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
+from groq import GroqError, RateLimitError
 from pydantic import BaseModel, Field
 
+from london_property.agent import chat, make_llm, make_tools
 from london_property.model import load_bundle, load_postcodes, find_postcode, predict_price
 from london_property.tools import (
     PostcodeNotFound, load_area_data, get_area_profile, get_neighbourhood, find_nearby, council_tax, stamp_duty
@@ -13,6 +17,8 @@ app = FastAPI(title='London Property Intelligence API')
 bundle = load_bundle()
 postcodes = load_postcodes()
 area = load_area_data()
+area_tools = make_tools(area)
+log = logging.getLogger('uvicorn.error')
 
 
 class PropertyRequest(BaseModel):
@@ -27,6 +33,26 @@ class PriceResponse(BaseModel):
     predicted_price: float
     postcode: str
     district: str
+
+
+class Message(BaseModel):
+    role: Literal['user', 'assistant']
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class ChatRequest(BaseModel):
+    messages: list[Message] = Field(min_length=1, max_length=20)
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    tools_used: list[dict]
+
+
+@cache
+def get_llm():
+    """The LLM, created on first use, so the API and its tests can start without a Groq key."""
+    return make_llm()
 
 
 def run_tool(tool, *args):
@@ -74,10 +100,12 @@ def area_profile(postcode: str):
     """Location facts, ward profile and London averages for a postcode."""
     return run_tool(get_area_profile, area, postcode)
 
+
 @app.get('/neighbourhood/{postcode}')
 def neighbourhood(postcode: str):
     """One-call overview: location facts, ward and borough vs London, 10-minute walk, nearest essentials."""
     return run_tool(get_neighbourhood, area, postcode)
+
 
 @app.get('/nearby/{postcode}')
 def nearby(postcode: str,
@@ -102,3 +130,17 @@ def stamp_duty_bill(price: int = Query(gt=0, le=100_000_000, examples=[500000]),
                     non_uk_resident: bool = False):
     """Stamp Duty Land Tax on a residential purchase in England."""
     return run_tool(stamp_duty, price, first_time_buyer, additional_property, non_uk_resident)
+
+
+@app.post('/chat', response_model=ChatResponse)
+def chat_endpoint(request: ChatRequest):
+    """Ask the area chatbot. Send the whole conversation each time: the API keeps no memory between requests."""
+    if request.messages[-1].role != 'user':
+        raise HTTPException(status_code=422, detail='The last message must be from the user')
+    try:
+        return chat([m.model_dump() for m in request.messages], area_tools, get_llm())
+    except RateLimitError:
+        raise HTTPException(status_code=429, detail='The chatbot is busy. Please try again in a minute.')
+    except GroqError:
+        log.exception('LLM call failed')
+        raise HTTPException(status_code=503, detail='The chatbot is unavailable right now. Please try again later.')

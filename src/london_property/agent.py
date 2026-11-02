@@ -14,6 +14,8 @@ from london_property.tools import (
 
 model_name = 'openai/gpt-oss-120b'
 max_rounds = 5
+max_history = 4    # only the last 4 messages go to the LLM, to stay inside the free tier's tokens per minute
+sorry = 'Sorry, I could not finish that one. Could you ask it more simply?'
 reasoning_effort = 'medium'    # thinking before answering: 'low' uses fewer tokens, 'medium' follows rules better
 
 system_prompt = """You are the London Property Intelligence assistant. You help people thinking of buying a home in London get a real feel for an area and the exact location: what day-to-day life is like there, how it compares with the rest of London, and what to check before buying.
@@ -111,7 +113,7 @@ def make_tools(area):
 def make_llm():
     """A function that sends the conversation to Groq and returns the LLM's next message.
     The agent only ever calls this function, so changing provider means rewriting only this."""
-    client = Groq()    # reads the GROQ_API_KEY environment variable
+    client = Groq(timeout=30, max_retries=1)  # reads the GROQ_API_KEY environment variable
 
     def llm(messages):
         response = client.chat.completions.create(
@@ -140,12 +142,12 @@ def execute(call, tools):
 def chat(history, tools, llm):
     """Answer the latest user message. history is the conversation so far, ending with the user's question:
     [{'role': 'user' or 'assistant', 'content': '...'}, ...]"""
-    messages = [{'role': 'system', 'content': system_prompt}, *history]
+    messages = [{'role': 'system', 'content': system_prompt}, *history[-max_history:]]
     tools_used = []
     for _ in range(max_rounds):
         reply = llm(messages)
         if not reply.tool_calls:
-            return {'answer': reply.content, 'tools_used': tools_used}
+            return {'answer': reply.content or sorry, 'tools_used': tools_used}
 
         messages.append({'role': 'assistant', 'content': reply.content, 'tool_calls': [
             {'id': c.id, 'type': 'function', 'function': {'name': c.function.name, 'arguments': c.function.arguments}}
@@ -155,7 +157,7 @@ def chat(history, tools, llm):
             messages.append({'role': 'tool', 'tool_call_id': call.id, 'content': execute(call, tools)})
             tools_used.append({'tool': call.function.name, 'arguments': call.function.arguments})
 
-    return {'answer': 'Sorry, I could not finish that one. Could you ask it more simply?', 'tools_used': tools_used}
+    return {'answer': sorry, 'tools_used': tools_used}
 
 
 def main():
