@@ -10,8 +10,6 @@ api_url = 'https://london-property-api.onrender.com'
 property_types = ['Flat', 'Terraced', 'Semi-Detached', 'Detached']
 tenures = ['Freehold', 'Leasehold']
 
-st.set_page_config(page_title='London Property Intelligence', layout='wide')
-
 
 # Loaded locally because the map must turn a click's lat/lon into a postcode
 @st.cache_data
