@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field
 from london_property.agent import chat, make_llm, make_tools
 from london_property.model import load_bundle, load_postcodes, find_postcode, predict_price
 from london_property.tools import (
-    PostcodeNotFound, load_area_data, get_area_profile, get_neighbourhood, find_nearby, council_tax, stamp_duty
+    PostcodeNotFound, load_area_data, get_area_profile, get_neighbourhood, find_nearby, get_guide, council_tax,
+    stamp_duty
 )
 
 app = FastAPI(title='London Property Intelligence API')
@@ -116,6 +117,11 @@ def nearby(postcode: str,
     """Places of one type near a postcode, nearest first."""
     return run_tool(find_nearby, area, postcode, place_type, radius_m, limit, subtype)
 
+
+@app.get('/guide/{guide}')
+def guide(guide: str, question: str = Query(min_length=1, max_length=200, examples=['service charges'])):
+    """The sections of a GOV.UK buyer's guide that best match a question."""
+    return run_tool(get_guide, area, guide, question)
 
 @app.get('/council-tax/{postcode}')
 def council_tax_bill(postcode: str, band: str = Query(examples=['C'])):

@@ -2,10 +2,14 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from london_property.tools import guide_slugs
 
 area_dir = Path(__file__).resolve().parents[1]/'data'/'processed'/'area'
 london = 'E12000007'
 
+@pytest.fixture(scope='module')
+def guides():
+    return pd.read_parquet(area_dir/'guides.parquet')
 
 @pytest.fixture(scope='module')
 def postcodes():
@@ -73,3 +77,14 @@ def test_walk_benchmark_valid(walk_benchmark, points):
 
 def test_school_dates_unambiguous(points):
     assert not points['info'].str.contains(r'\d{2}/\d{2}/\d{4}').any()
+
+def test_guides_valid(guides):
+    assert set(guides['guide']) == set(guide_slugs)
+    assert guides['url'].str.startswith('https://www.gov.uk/').all()
+    assert (guides['text'].str.len() > 40).all()
+
+def test_guide_matches_stamp_duty_tool(guides):
+    """If GOV.UK changes the stamp duty bands, this fails as a reminder to update tools.stamp_duty."""
+    sdlt = ' '.join(guides.loc[guides['guide'] == 'stamp-duty-land-tax', 'text'])
+    for threshold in ['£125,000', '£250,000', '£925,000', '£1.5 million', '£300,000', '£500,000']:
+        assert threshold in sdlt

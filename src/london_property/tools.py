@@ -10,6 +10,9 @@ from pathlib import Path
 
 import pandas as pd
 from scipy.spatial import cKDTree
+from scipy.sparse import csr_matrix
+from scipy.spatial import cKDTree
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 project_root = Path(__file__).resolve().parents[2]
 area_dir = project_root/'data'/'processed'/'area'
@@ -41,6 +44,12 @@ essentials = {'primary school': ('school', 'primary'), 'secondary school': ('sch
               'gp': ('gp', None), 'supermarket': ('supermarket', None), 'park': ('park', 'park'),
               'pharmacy': ('pharmacy', None)}
 
+# The GOV.UK guides the chatbot can quote (their page addresses on gov.uk)
+guide_slugs = ['buying-a-home', 'stamp-duty-land-tax', 'leasehold-property', 'joint-property-ownership',
+               'shared-ownership-scheme', 'first-homes-scheme', 'lifetime-isa', 'right-to-buy-buying-your-council-home',
+               'council-tax', 'get-information-about-property-and-land', 'planning-permission-england-wales',
+               'party-walls-building-works']
+
 # Each council tax band is a fixed fraction of Band D, set in law
 band_ratio = {'A': 6/9, 'B': 7/9, 'C': 8/9, 'D': 9/9, 'E': 11/9, 'F': 13/9, 'G': 15/9, 'H': 18/9}
 
@@ -51,24 +60,33 @@ class PostcodeNotFound(ValueError):
 
 @dataclass
 class AreaData:
-    """The area tables, a KD-tree over the points and the walk benchmark, loaded once at startup."""
+    """Everything the tools read, loaded once at startup: the area tables, a KD-tree over the points,
+    the walk benchmark, and the GOV.UK guide sections with their TF-IDF search index."""
     postcodes: pd.DataFrame
     profile: pd.DataFrame
     points: pd.DataFrame
     tree: cKDTree
     walk_benchmark: pd.DataFrame
+    guides: pd.DataFrame
+    guide_vectorizer: TfidfVectorizer
+    guide_matrix: csr_matrix
 
 
 def load_area_data():
     points = pd.read_parquet(area_dir/'points.parquet')
+    guides = pd.read_parquet(area_dir/'guides.parquet')
+    vectorizer = TfidfVectorizer(stop_words='english', sublinear_tf=True)
+    documents = (guides['guide_title'] + ' ' + guides['part_title'] + ' ') * 2 + guides['text']
     return AreaData(
         postcodes=pd.read_parquet(area_dir/'postcodes.parquet').set_index('postcode'),
         profile=pd.read_parquet(area_dir/'ward_profile.parquet').set_index('ward_code'),
         points=points,
         tree=cKDTree(points[['easting', 'northing']].to_numpy()),
         walk_benchmark=pd.read_parquet(area_dir/'walk_benchmark.parquet'),
+        guides=guides,
+        guide_vectorizer=vectorizer,
+        guide_matrix=vectorizer.fit_transform(documents),
     )
-
 
 def to_plain(obj, orient='index'):
     """A pandas row or table as plain Python: NaN becomes None, numpy numbers become Python numbers."""
@@ -110,7 +128,6 @@ def get_area_profile(data, postcode):
         'london_average': to_plain(data.profile.loc[london].drop(['ward_name', 'borough_code', 'borough_name'])),
     }
 
-
 def find_nearby(data, postcode, place_type, radius_m=1000, limit=5, subtype=None):
     """Places of one type within a radius of a postcode, nearest first, with a total count."""
     if place_type not in place_types:
@@ -130,7 +147,6 @@ def find_nearby(data, postcode, place_type, radius_m=1000, limit=5, subtype=None
         'count': len(near),
         'nearest': to_plain(near.head(limit)[['name', 'subtype', 'info', 'distance_m', 'lat', 'lon']], orient='records'),
     }
-
 
 def get_neighbourhood(data, postcode):
     """A one-call overview of a postcode for the chatbot: location facts, what is unusually high or low,
@@ -181,6 +197,21 @@ def get_neighbourhood(data, postcode):
         'borough_vs_london': to_plain(borough_vs_london),
         'within_10_min_walk': to_plain(walk),
         'nearest': nearest,
+    }
+
+def get_guide(data, guide, question):
+    """The two sections of a GOV.UK guide that best match a question (TF-IDF similarity), with their links,
+    plus the titles of the guide's other sections."""
+    if guide not in guide_slugs:
+        raise ValueError(f"Unknown guide '{guide}'. Choose from: {', '.join(guide_slugs)}")
+    parts = data.guides[data.guides['guide'] == guide]
+    query = data.guide_vectorizer.transform([question])
+    scores = (data.guide_matrix[parts.index.to_numpy()] @ query.T).toarray().ravel()
+    ranked = parts.iloc[(-scores).argsort(kind='stable')]
+    return {
+        'guide': ranked['guide_title'].iloc[0], 'updated': ranked['updated'].iloc[0],
+        'sections': to_plain(ranked.head(2)[['part_title', 'url', 'text']], orient='records'),
+        'other_sections': ranked['part_title'].iloc[2:].tolist(),
     }
 
 def council_tax(data, postcode, band):

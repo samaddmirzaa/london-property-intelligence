@@ -9,7 +9,8 @@ from functools import partial
 from groq import Groq
 
 from london_property.tools import (
-    band_ratio, place_types, load_area_data, get_neighbourhood, find_nearby, council_tax, stamp_duty
+    band_ratio, guide_slugs, place_types, load_area_data, get_neighbourhood, find_nearby, get_guide, council_tax,
+    stamp_duty
 )
 
 model_name = 'openai/gpt-oss-120b'
@@ -22,6 +23,7 @@ system_prompt = """You are the London Property Intelligence assistant. You help 
 
 How to work
 - For any question about a place, call get_neighbourhood first. Use find_nearby for anything it doesn't cover (a particular supermarket chain or cuisine, more schools, a wider radius), council_tax for the bill in a band, and stamp_duty for the tax on a price.
+- For how buying works (the process, conveyancing, surveys, stamp duty rules, leasehold, joint ownership, shared ownership, First Homes, Lifetime ISA, Right to Buy, council tax, Land Registry records, planning permission, party walls), call get_guide and answer only from the sections it returns, linking the GOV.UK page you used. If no guide covers the question, say so.
 - The tools need a full London postcode. If the user names an area without one, ask for the postcode of the street they are looking at, without suggesting example postcodes. If the postcode is in a different area from the one they named, say which area it is in.
 - Every fact, number and comparison about a place must come from a tool result in this conversation. Your own knowledge of London is not a source: no train lines or journey times, street names, landmarks, policing, school results or reputation, catchment areas, and no comparisons the tools don't give. Never explain tax rules from memory; use the bands the tool returns.
 - The only background you may add is what a measure means or why it behaves as it does (for example, that per-resident crime rates are inflated where visitors outnumber residents). If the tools don't cover something the user asks about, say so and suggest how to check it.
@@ -55,7 +57,7 @@ Weak (facts not in the data): "The Overground gets you to Liverpool Street in 15
 Strong: "It's a lively spot, with more cafés within a 10-minute walk than most of London (42). Crime is a little above the London average (107.7 per 1,000 residents vs 99.2), driven by public order offences, which are higher than in 90% of wards. These tend to cluster around busy high streets, so walk the street on a Friday night before you buy."
 
 
-Before you send any answer, check every sentence against the tool results above.    Every number must match them (rounding is fine, e.g. 124 per 1,000 rather than 124.23). Delete anything they don't contain: stations other than nearest_station, train lines or services at any station, journey times, named landmarks, buildings or streets, policing or CCTV, schools not listed, school results or reputation, and reasons for a crime rate beyond visitor numbers.
+Before you send any answer, check every sentence against the tool results above.    Every number must match them (rounding is fine, e.g. 124 per 1,000 rather than 124.23). Delete anything they don't contain: stations other than nearest_station, train lines or services at any station, journey times, named landmarks, buildings or streets, policing or CCTV, schools not listed, school results or reputation, reasons for a crime rate beyond visitor numbers, and rules about buying that did not come from get_guide or stamp_duty.
 """
 
 def tool(name, description, properties, required):
@@ -97,6 +99,12 @@ tool_schemas = [
           'additional_property': {'type': 'boolean', 'description': 'Will own more than one home after buying'},
           'non_uk_resident': {'type': 'boolean', 'description': 'Not resident in the UK'}},
          ['price']),
+    tool('get_guide',
+         'Official GOV.UK guidance for home buyers in England. Pick the guide and give the question in a few words; '
+         'returns the two best-matching sections with their links, and the titles of the other sections.',
+         {'guide': {'type': 'string', 'enum': guide_slugs},
+          'question': {'type': 'string', 'description': 'A few keywords, e.g. service charges'}},
+         ['guide', 'question']),
 ]
 
 
@@ -107,6 +115,7 @@ def make_tools(area):
         'find_nearby': partial(find_nearby, area),
         'council_tax': partial(council_tax, area),
         'stamp_duty': stamp_duty,
+        'get_guide': partial(get_guide, area),
     }
 
 

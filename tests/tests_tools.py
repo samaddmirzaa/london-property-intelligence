@@ -2,8 +2,8 @@ import pytest
 import pandas as pd
 
 from london_property.tools import (
-    load_area_data, normalise_postcode, get_area_profile, get_neighbourhood, london_percentile, find_nearby, council_tax, stamp_duty,
-    place_types, walk_m
+    load_area_data, normalise_postcode, get_area_profile, get_neighbourhood, find_nearby, get_guide, council_tax,
+    stamp_duty, london_percentile, place_types, walk_m
 )
 
 
@@ -29,6 +29,11 @@ def test_unknown_postcode(data):
     with pytest.raises(ValueError):
         get_area_profile(data, 'ZZ69 69ZZ')
 
+def test_guide():
+    response = client.get('/guide/leasehold-property', params={'question': 'ground rent'})
+    assert response.status_code == 200
+    assert response.json()['sections'][0]['url'].startswith('https://www.gov.uk/leasehold-property/')
+    assert client.get('/guide/not-a-guide', params={'question': 'rent'}).status_code == 422
 
 def test_find_nearby(data):
     result = find_nearby(data, 'N16 0UD', 'park', radius_m=1000, limit=100)
@@ -63,6 +68,27 @@ def test_neighbourhood_city_of_london(data):
     assert result['ward_vs_london']['crime_total']['ward'] is None
     assert result['ward_vs_london']['crime_total']['london_percentile'] is None
 
+@pytest.mark.parametrize('guide, question, expected', [
+    ('leasehold-property', 'ground rent', 'Service charges and other expenses'),
+    ('leasehold-property', 'extend my lease', 'Extending, changing or ending a lease'),
+    ('buying-a-home', 'conveyancing solicitor', 'Transferring ownership (conveyancing)'),
+    ('buying-a-home', 'energy performance certificate', 'Deciding on a home'),
+    ('shared-ownership-scheme', 'staircasing buying more shares', "Buying more shares ('staircasing')"),
+    ('right-to-buy-buying-your-council-home', 'discount', 'Discounts'),
+    ('council-tax', 'challenge my band', 'Working out your Council Tax'),
+    ('joint-property-ownership', 'buying with my partner', 'Overview'),
+])
+def test_get_guide_finds_the_right_section(data, guide, question, expected):
+    result = get_guide(data, guide, question)
+    assert expected in [s['part_title'] for s in result['sections']]
+
+def test_get_guide_result(data):
+    result = get_guide(data, 'lifetime-isa', 'zzz')
+    assert result['sections'][0]['part_title'] == 'Overview'
+    assert len(result['sections']) + len(result['other_sections']) == 3
+    with pytest.raises(ValueError):
+        get_guide(data, 'how-to-get-rich', 'property')
+
 def test_council_tax(data):
     band_d = council_tax(data, 'N16 0UD', 'D')['annual_bill']
     assert council_tax(data, 'N16 0UD', 'h')['annual_bill'] == round(band_d * 2, 2)
@@ -85,7 +111,6 @@ def test_london_percentile():
     table = pd.DataFrame({'a': [1, 2, 3, 4, 5], 'b': [0, 0, 0, 0, 5], 'c': [1, None, 2, 3, None]})
     row = pd.Series({'a': 5.0, 'b': 0.0, 'c': 2.0})
     assert london_percentile(table, row).tolist() == [90, 40, 50]
-
 
 def test_stamp_duty_bands():
     result = stamp_duty(650_000, additional_property=True, non_uk_resident=True)
