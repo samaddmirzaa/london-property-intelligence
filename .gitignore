@@ -5,8 +5,8 @@ __pycache__/
 .pytest_cache/
 
 # Big/raw data stays local, too large for GitHub
-data/raw/
-data/processed/
+data/processed/*
+!data/processed/area/
 data/supplementary/*.csv
 
 # MLflow tracking artifacts
