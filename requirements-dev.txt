@@ -11,3 +11,5 @@ pandas
 numpy
 pyarrow
 pytest
+geopandas
+beautifulsoup4

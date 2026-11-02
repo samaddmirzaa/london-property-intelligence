@@ -21,6 +21,12 @@ def test_neighbourhood():
     assert response.json()['within_10_min_walk']['cafe']['count'] > 0
     assert client.get('/neighbourhood/ZZ69 69ZZ').status_code == 404
 
+def test_guide():
+    response = client.get('/guide/leasehold-property', params={'question': 'ground rent'})
+    assert response.status_code == 200
+    assert response.json()['sections'][0]['url'].startswith('https://www.gov.uk/leasehold-property/')
+    assert client.get('/guide/not-a-guide', params={'question': 'rent'}).status_code == 422
+
 def test_nearby():
     response = client.get('/nearby/N16 0UD', params={'type': 'school', 'subtype': 'primary', 'limit': 3})
     assert response.status_code == 200

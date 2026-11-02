@@ -29,12 +29,6 @@ def test_unknown_postcode(data):
     with pytest.raises(ValueError):
         get_area_profile(data, 'ZZ69 69ZZ')
 
-def test_guide():
-    response = client.get('/guide/leasehold-property', params={'question': 'ground rent'})
-    assert response.status_code == 200
-    assert response.json()['sections'][0]['url'].startswith('https://www.gov.uk/leasehold-property/')
-    assert client.get('/guide/not-a-guide', params={'question': 'rent'}).status_code == 422
-
 def test_find_nearby(data):
     result = find_nearby(data, 'N16 0UD', 'park', radius_m=1000, limit=100)
     distances = [p['distance_m'] for p in result['nearest']]

@@ -4,6 +4,7 @@ The LLM never states facts about a place from memory. It decides which tools to 
 them, and it writes the answer from their results. 
 """
 import json
+import re
 from functools import partial
 
 from groq import Groq
@@ -17,6 +18,7 @@ model_name = 'openai/gpt-oss-120b'
 max_rounds = 5
 max_history = 4    # only the last 4 messages go to the LLM, to stay inside the free tier's tokens per minute
 sorry = 'Sorry, I could not finish that one. Could you ask it more simply?'
+citation_mark = re.compile(r'\s*【[^】]*】')    # gpt-oss's own citation markers, e.g. 【1†text】
 reasoning_effort = 'medium'    # thinking before answering: 'low' uses fewer tokens, 'medium' follows rules better
 
 system_prompt = """You are the London Property Intelligence assistant. You help people thinking of buying a home in London get a real feel for an area and the exact location: what day-to-day life is like there, how it compares with the rest of London, and what to check before buying.
@@ -47,7 +49,7 @@ How to write
 - Tailor the answer to the buyer: families care about schools, parks and safety; commuters about transport; first-time buyers about costs and stamp duty. If you don't know what matters to them, end by asking.
 - Be balanced: name the trade-offs, and end with a short Worth checking list of things the data can't show (the street at night, noise, the lease, a flood search).
 - Describe places, not people. Never call an area good, bad, safe or dangerous, and never mention residents' ethnicity, religion or nationality. Give the facts and let the user judge.
-- About 250 words for a first answer. A follow-up answers just that question in about 150 words, without repeating the overview. British English, place names exactly as in the data (e.g. Newham), numbers written like £1,944,
+- About 250 words for a first answer. A follow-up answers just that question in about 150 words, without repeating the overview. British English, place names exactly as in the data (e.g. Newham), numbers written like £1,944, walking distances in metres. This is not financial or legal advice.
 - Finish with one short line of sources and periods, e.g. "Sources: Met Police (Oct 2025 to Sep 2026), UK HPI (Jul 2026), Census 2021, TfL, Ofsted, Overture Maps."
 
 Example of turning data into meaning
@@ -156,7 +158,8 @@ def chat(history, tools, llm):
     for _ in range(max_rounds):
         reply = llm(messages)
         if not reply.tool_calls:
-            return {'answer': reply.content or sorry, 'tools_used': tools_used}
+            answer = citation_mark.sub('', reply.content or '')
+            return {'answer': answer or sorry, 'tools_used': tools_used}
 
         messages.append({'role': 'assistant', 'content': reply.content, 'tool_calls': [
             {'id': c.id, 'type': 'function', 'function': {'name': c.function.name, 'arguments': c.function.arguments}}

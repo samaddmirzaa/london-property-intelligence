@@ -79,3 +79,8 @@ def test_only_recent_history_is_sent(tools):
     history = [{'role': 'user' if i % 2 == 0 else 'assistant', 'content': f'message {i}'} for i in range(9)]
     chat(history, tools, llm)
     assert seen[0][1:] == history[-max_history:]
+
+def test_citation_marks_removed(tools):
+    llm, seen = scripted_llm(answer('Ground rent is set by the lease 【1†text】. Sources below.'))
+    result = chat([{'role': 'user', 'content': 'What is ground rent?'}], tools, llm)
+    assert result['answer'] == 'Ground rent is set by the lease. Sources below.'

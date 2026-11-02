@@ -2,6 +2,5 @@ streamlit
 folium
 streamlit-folium
 pandas
-geopandas
 pyarrow
 requests
