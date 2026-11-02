@@ -1,6 +1,7 @@
 notebooks/
 data/
 !data/supplementary/postcodes_london.parquet
+!data/processed/area/*.parquet
 reports/
 streamlit/
 tests/
