@@ -185,7 +185,8 @@ def rescore(model, effort):
 def scores_table(rows):
     """One row of scores per answer: the code checks, plus the judge's verdicts once every answer is judged."""
     scores = rows[['tool_ok', 'facts_ok', 'grounded', 'guardrails_ok']].astype(float)
-    if 'judge' in rows and rows['judge'].notna().all():
+    judged = 'judge' in rows and rows['judge'].notna().all()
+    if judged and rows['judge'].map(lambda v: v.get('judge_id')).nunique() == 1:  # every verdict, one judge prompt
         verdicts = pd.DataFrame(rows['judge'].tolist())
         problems = verdicts['unsupported_claims'].str.len() + verdicts['contradictions'].str.len()
         scores['judge_faithful'] = (problems == 0).astype(float)

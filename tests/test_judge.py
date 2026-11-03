@@ -27,7 +27,8 @@ def test_judge_input(tools):
 
 
 def test_scores_table():
-    verdict = {'unsupported_claims': [], 'contradictions': [], 'guardrail_breaches': [], 'helpfulness': 5, 'reason': ''}
+    verdict = {'unsupported_claims': [], 'contradictions': [], 'guardrail_breaches': [], 'helpfulness': 5, 'reason': '',
+               'judge_id': 'a1b2c3d4'}
     bad = {**verdict, 'unsupported_claims': ['Overground at Peckham Rye'], 'helpfulness': 3}
     code = {'tool_ok': True, 'facts_ok': None, 'grounded': 1.0, 'guardrails_ok': True}
     rows = pd.DataFrame([{**code, 'judge': verdict}, {**code, 'judge': bad}])
@@ -35,3 +36,6 @@ def test_scores_table():
     assert scores['judge_faithful'].tolist() == [1, 0]
     assert scores['helpfulness'].mean() == 4
     assert 'helpfulness' not in scores_table(rows.drop(columns='judge'))
+
+    mixed = pd.DataFrame([{**code, 'judge': verdict}, {**code, 'judge': {**bad, 'judge_id': 'older000'}}])
+    assert 'helpfulness' not in scores_table(mixed)
