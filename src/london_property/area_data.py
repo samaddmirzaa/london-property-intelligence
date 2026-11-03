@@ -1,13 +1,11 @@
 """Rebuild the three area tables the chatbot uses from the raw files in data/raw.
-
-Run from the project root:  python -m london_property.area_data
-Outputs (data/processed/area): postcodes.parquet, ward_profile.parquet, points.parquet
 """
 from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
 from scipy.spatial import cKDTree
+from london_property.refresh import borough_prices, borough_rents, crime_rates
 from london_property.tools import count_by_type, walk_m
 
 project_root = Path(__file__).resolve().parents[2]
@@ -150,17 +148,9 @@ def build_ward_profile(pc, wards, lookup):
 
     # Crime: last 12 months per 1,000 residents, fraud excluded, Met wards only
     crime = pd.read_csv(raw/'crime'/'crime_ward_monthly_2024_10_to_2026_09.csv')
-    crime = crime[crime['WardCode'].isin(profile.index) & ~crime['Group'].isin(['NFIB FRAUD', 'FRAUD AND FORGERY'])]
-    months = sorted(c for c in crime.columns if c.isdigit())[-12:]
-    crime = crime.assign(crimes_12m=crime[months].sum(axis=1))
-    counts = crime.pivot_table(index='WardCode', columns='Group', values='crimes_12m', aggfunc='sum', fill_value=0)
-    counts.columns = 'crime_' + counts.columns.str.lower().str.replace(' ', '_')
-    counts['crime_total'] = counts.sum(axis=1)
-    met_pop = profile.loc[counts.index, 'population']
-    rates = counts.div(met_pop, axis=0) * 1000
-    rates.loc[london] = counts.sum() / met_pop.sum() * 1000
-    profile = profile.join(rates.round(2))
-    profile['crime_months'] = f'{months[0]}-{months[-1]}'
+    rates, months = crime_rates(crime, profile['population'])
+    profile = profile.join(rates)
+    profile['crime_months'] = months
 
     # Age mix (Census 2021)
     age = pd.read_csv(raw/'census'/'census2021_age_bands_lsoa.csv')
@@ -187,25 +177,9 @@ def build_ward_profile(pc, wards, lookup):
     local.loc[london] = pc[loc_cols].mean()
     profile = profile.join(local.round({'ptal_ai': 1, 'no2': 1, 'pm25': 1, 'pm10': 1}))
 
-    # Borough house prices: latest month of the UK House Price Index
-    hpi = pd.read_csv(raw/'house_prices'/'house_price_index_borough_monthly_to_2026_07.csv')
-    hpi['Date'] = pd.to_datetime(hpi['Date'], dayfirst=True)
-    latest = hpi[hpi['Date'] == hpi['Date'].max()]
-    prices = latest.set_index('AreaCode')[['AveragePrice', '12m%Change', 'FlatPrice', 'TerracedPrice',
-                                            'SemiDetachedPrice', 'DetachedPrice']]
-    prices.columns = ['price_avg', 'price_change_12m', 'price_flat', 'price_terraced', 'price_semi', 'price_detached']
-    prices['price_month'] = latest['Date'].iloc[0].strftime('%Y-%m')
-
-    # Borough rents: latest month of the ONS Price Index of Private Rents
-    rents = pd.read_csv(raw/'rents'/'private_rents_borough_monthly_2015_01_to_2026_08.csv')
-    latest_rent = rents[rents['Time period'] == rents['Time period'].max()]
-    rent = latest_rent.set_index('Area code')[['Rental price', 'Annual change', 'Rental price one bed',
-                                               'Rental price two bed', 'Rental price three bed',
-                                               'Rental price four or more bed']]
-    rent = rent.apply(pd.to_numeric, errors='coerce')
-    rent.columns = ['rent_avg', 'rent_change_12m', 'rent_1bed', 'rent_2bed', 'rent_3bed', 'rent_4bed_plus']
-    rent['rent_change_12m'] = rent['rent_change_12m'].round(1)
-    rent['rent_month'] = latest_rent['Time period'].iloc[0][:7]
+    # Borough house prices and rents: latest month of the UK House Price Index and the ONS private rents index
+    prices = borough_prices(pd.read_csv(raw/'house_prices'/'house_price_index_borough_monthly_to_2026_07.csv'))
+    rent = borough_rents(pd.read_csv(raw/'rents'/'private_rents_borough_monthly_2015_01_to_2026_08.csv'))
 
     # Council tax Band D 2026-27; London = tax-base-weighted average
     ct = pd.read_csv(raw/'council_tax'/'council_tax_borough_2026_27.csv')

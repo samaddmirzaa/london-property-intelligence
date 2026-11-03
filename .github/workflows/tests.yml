@@ -16,7 +16,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements-api.txt
-          pip install pytest httpx
+          pip install pytest httpx beautifulsoup4
           pip install -e .
 
       - name: Run tests
