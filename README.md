@@ -2,6 +2,7 @@
 
 ![Tests](https://github.com/samaddmirzaa/london-property-intelligence/actions/workflows/tests.yml/badge.svg)
 ![Drift Detection](https://github.com/samaddmirzaa/london-property-intelligence/actions/workflows/drift.yml/badge.svg)
+![Data refresh](https://github.com/samaddmirzaa/london-property-intelligence/actions/workflows/refresh.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![Docker](https://img.shields.io/badge/docker-containerised-blue)
 
@@ -12,7 +13,8 @@ Two tools for people buying a home in London, behind one API and one app:
   quality, crime, prices, rents and council tax, every figure compared with the rest of London. It
   also answers how-to questions (leasehold, stamp duty, conveyancing, shared ownership) from the
   official GOV.UK guides. Every fact comes from public data through tools; the language model only
-  writes the sentences.
+  writes the sentences. Its answers are evaluated with code checks and an LLM judge, and its data
+  refreshes itself every month.
 - **A house price model** trained on 1.4 million EPC-linked Land Registry sales, scoring R² 0.89 with
   a £47k median error on 2024 sales held out of training entirely.
 
@@ -81,6 +83,70 @@ dangerous, and adds the caveats that matter: per-resident crime rates are inflat
 outnumber residents, flood zones ignore defences, prices are borough-wide. Tool errors (an unknown
 postcode, a bad argument) go back to the model as text so it can correct itself or explain.
 
+### Evaluation
+
+Spot checks don't show how often a chatbot gets things wrong, so I wrote 40 new questions on
+postcodes never used while writing the prompt: area overviews, buyer types (families, commuters,
+first-time buyers, retirees), nearby searches, council tax and stamp duty, GOV.UK guide questions,
+trap questions (no postcode, a postcode outside London, "is it safe?", "will prices rise?") and
+follow-ups. Each answer is checked two ways:
+
+- **In code**, for free and the same every time: did it call the right tool for the right postcode,
+  does it contain the expected figures and names (exact council tax and stamp duty amounts, the shop
+  that was asked about), and can every number in it be traced to the data the tools returned?
+- **By an LLM judge** for what code can't check: a model from a different family (Qwen 3.8 27B, so no
+  model marks its own work) reads the question, the tool data and the answer, and lists unsupported
+  claims, contradictions and guardrail breaches, plus helpfulness from 1 to 5. Its output is forced
+  into a fixed JSON schema. Before trusting it I tested it on 10 errors I had found by hand in 20b's
+  answers: it caught 8. It also flagged things the chatbot is allowed to do, so I gave it the same
+  data definitions as the chatbot and a list of what not to report.
+
+Groq's free tier allows 200,000 tokens per model per day and a question costs about 8,000, so the
+runs resume where they stop. Both models answered the first 27 questions (area, buyer, nearby, tax
+and one guide question); the traps, the remaining guide questions and the follow-ups have not been
+run yet. Results on those 27:
+
+| | gpt-oss-120b (live) | gpt-oss-20b |
+|---|---|---|
+| Right tool, right postcode | 27 / 27 | 25 / 27 |
+| Expected figures and names present | 15 / 16 | 14 / 16 |
+| Every number traceable to the data | 26 / 27 | 23 / 27 |
+| Helpfulness (judge, 1 to 5) | 4.5 | not comparable* |
+| Median response time | 3.4 s | 2.0 s |
+| Tokens per question | about 8,100 | about 8,000 |
+
+\* 20b was judged with an earlier version of the judge prompt.
+
+The traceability row counts after checking every flag by hand: the scorer flagged 3 of 120b's answers,
+and 2 were its own artefacts (a 5% rate written as "0.05", the "26" in "2025-26"). 20b's misses were
+real: it invented stamp duty figures without calling the tool, put a shop 363 m away "within 300 m",
+and asked a needless question instead of calculating non-resident stamp duty.
+
+**What the checks found in the live model's answers.** I verified all 29 of the judge's flags against
+the tool data: 19 were real and 10 were mistakes by the judge (it called the 16th percentile "not the
+bottom sixth", for example), so its flags are reviewed rather than trusted. 13 of the 27 answers
+contained at least one claim the data doesn't support, mostly small (some contained more than one):
+
+| Pattern | Answers | Example |
+|---|---|---|
+| Transport links from general knowledge | 5 | "Northern Line and Overground" near Harrow (wrong), bus routes, "quick links to Kent" |
+| An older Ofsted grade presented as the current one | 2 | "Good" for a school whose newest report card has no overall grade |
+| Labels the rules forbid | 2 | "comparatively safe", "a little gritty" |
+| A percentile read as a share | 1 | "only 3% under 15" where 3 is the percentile (the share is 11%) |
+| A claim about residents the data doesn't hold | 1 | "dominated by young professionals" (the data has ages, not jobs) |
+| Details not in the GOV.UK text | 1 | "First-tier Tribunal" where the guide says "a tribunal" |
+| Ranking or rule from memory | 2 | "second-largest share in London", the old £425,000 first-time buyer threshold |
+| Search not widened | 1 | "No Lidl" after a 1 km search; there is one about 1.5 km away |
+
+The data side holds up: tools, figures and tax amounts were right in almost every answer. The main
+remaining failure is the model filling gaps with general knowledge of London, and transport is the
+biggest gap, because the data gives the nearest station but not the lines that serve it. The code
+checks and the judge caught different errors (the code caught the Lidl and the £425,000 threshold,
+the judge the transport claims and the misread percentile), so both are needed. On these results
+gpt-oss-120b stays the live model: more accurate tool use and better-grounded numbers than 20b for
+the same tokens, at about a second slower. Scores by category and the overall metrics are logged to
+MLflow for each run.
+
 ### Data
 
 | Topic | Source |
@@ -106,6 +172,16 @@ that the API loads at startup: 180,982 live London postcodes, a 704-ward profile
 average row, 94,236 places of 17 types, the 5,000-postcode walk benchmark and the guide sections.
 All spatial work happens at build time in British National Grid metres, so the API needs no GIS
 libraries and fits in Render's 512 MB (measured at 409 MB).
+
+**Monthly refresh.** Crime, house prices and rents are published monthly, so a GitHub Action runs on
+the 25th of each month. It downloads the newest release of each (finding the latest file on each
+publisher's page, since the names change), recomputes only those columns with the same functions the
+full build uses, re-downloads the GOV.UK guides, runs the test suite on the new data, and commits it
+if anything changed, which redeploys the API. Each source is handled on its own: if one fails or has
+nothing newer, its last good data stays and the run summary says why. Checked against the live
+sources, the refresh reproduces the stored crime and rent figures exactly. House prices differ by up
+to 2% for the same month, because Land Registry revises recent months as late sales are registered,
+and the refresh takes the revised figures.
 
 ---
 
@@ -246,7 +322,7 @@ features drift, or a single feature exceeds PSI 0.5.
          +-------------------------------------------------------+
          |                 FastAPI on Render (Docker)            |
          |  POST /chat            agent loop -> Groq gpt-oss-120b |
-         |  GET  /neighbourhood   /nearby  /guide  /area          |
+         |  GET  /neighbourhood   /nearby  /guide                 |
          |  GET  /council-tax     /stamp-duty                     |
          |  POST /predict-price   GET /health                     |
          +---------------+---------------------------+-----------+
@@ -260,8 +336,9 @@ features drift, or a single feature exceeds PSI 0.5.
            +---------------------------+
 
   GitHub Actions
-    tests.yml   runs the test suite on every push
-    drift.yml   runs on data commits: PSI check, then conditional retrain
+    tests.yml     runs the test suite on every push
+    drift.yml     runs on data commits: PSI check and retrain decision
+    refresh.yml   monthly: new crime, prices, rents and guides, tested, committed, redeployed
 ```
 
 ### API
@@ -272,7 +349,6 @@ features drift, or a single feature exceeds PSI 0.5.
 | `GET /neighbourhood/{postcode}` | The overview the chatbot reads, compared with London |
 | `GET /nearby/{postcode}?type=` | Places of one type nearby, with an optional subtype |
 | `GET /guide/{guide}?question=` | Matching sections of a GOV.UK buyer guide |
-| `GET /area/{postcode}` | The raw location and ward profile |
 | `GET /council-tax/{postcode}?band=` | Yearly council tax for a band |
 | `GET /stamp-duty?price=` | Stamp Duty Land Tax with the band breakdown |
 | `POST /predict-price` | The price model |
@@ -280,21 +356,24 @@ features drift, or a single feature exceeds PSI 0.5.
 `/chat` validates its input (only user and assistant roles, so nobody can inject system
 instructions; message length and count limits), sends only the last four messages to the model to
 stay inside the free tier's token budget, and returns 429 when the model is rate limited and 503 when
-it is unavailable, with the cause logged.
+it is unavailable, with the cause logged. Every chat writes one JSON line to the log (status, tools
+called, tokens, response time) and never the user's text, since people type addresses into it.
 
 ---
 
 ## Tests
 
-65 tests run on every push, with no API key or network needed: a fake language model stands in for
-Groq in the agent and `/chat` tests.
+72 tests run on every push, with no API key or network needed: a fake language model stands in for
+Groq in the agent, `/chat` and judge tests, and the refresh tests swap the downloads for small tables.
 
 | File | Covers |
 |---|---|
 | `test_area_data.py` | The processed tables: London coverage, valid values, every postcode's ward has a profile, places inside London, unambiguous Ofsted dates, the guides, and a check that the GOV.UK stamp duty guide still matches the bands in the stamp duty tool |
 | `test_tools.py` | Each tool, including hand-calculated stamp duty, the percentile maths, and 8 retrieval cases for the guides |
 | `test_agent.py` | The agent loop: tool results reach the model, errors go back as text, the round cap, history trimming |
-| `test_api_area.py`, `test_api_chat.py` | Status codes, validation, and rate-limit and outage handling |
+| `test_api_area.py`, `test_api_chat.py` | Status codes, validation, rate-limit and outage handling, and that chats are logged without their text |
+| `test_evaluate.py`, `test_judge.py` | Number extraction (including the narrow no-break spaces gpt-oss writes in thousands), the scoring, and the judge's schema and input |
+| `test_refresh.py` | The crime rates on a hand-checked table, newer data replacing older, and failed or older sources leaving the data unchanged |
 | `test_model.py`, `test_api.py` | The price model and `/predict-price` |
 
 ---
@@ -302,8 +381,8 @@ Groq in the agent and `/chat` tests.
 ## Tech stack
 
 Python 3.11, pandas, scikit-learn, XGBoost and SHAP for the price model, with MLflow for experiment
-tracking. GeoPandas and SciPy (KD-trees) for the area data build. Groq (gpt-oss-120b) with tool
-calling for the chatbot, scikit-learn TF-IDF for guide retrieval and BeautifulSoup for cleaning the
+tracking (the price model and the chatbot evaluations). GeoPandas and SciPy (KD-trees) for the area data build. Groq (gpt-oss-120b) with tool
+calling for the chatbot, Qwen 3.8 27B on Groq as the evaluation judge, scikit-learn TF-IDF for guide retrieval and BeautifulSoup for cleaning the
 GOV.UK pages. FastAPI, Pydantic v2 and Uvicorn for serving, packaged with Docker. Streamlit and
 Folium for the app. GitHub Actions and pytest for CI. Hosted on Render (API) and Streamlit Community
 Cloud (app).
@@ -331,6 +410,9 @@ streamlit run streamlit/main.py               # the app (calls the live API)
 python -m london_property.agent               # chat with the agent in the terminal
 pytest tests/ -v                              # test suite
 python -m london_property.drift               # drift check
+python -m london_property.evaluate            # answer the evaluation questions (resumes if stopped)
+python -m london_property.judge               # judge the saved answers
+python -m london_property.refresh             # download this month's crime, prices, rents and guides
 ```
 
 The processed tables the API needs are in the repository. The raw data is not, since it runs to
@@ -343,20 +425,20 @@ rebuilds the area tables from it and `python -m london_property.guide_data` re-d
 
 - **The free tiers set the pace.** Groq's free tier allows about one detailed answer per minute,
   and the API sleeps when idle.
-- **The model can still add detail that isn't in the data.** Three rounds of testing against the
-  raw tool output removed every error that came from how the data was shaped (ambiguous dates,
-  mixed-up rankings, outdated tax rules), and the prompt bans the inventions seen in testing, but a
-  prompt cannot rule them out completely. Measuring this properly is the next step (below).
+- **The model can still add detail that isn't in the data,** mostly transport links. The evaluation
+  measures how often (above). The prompt bans the inventions seen in testing, but a prompt cannot rule
+  them out completely.
+- **The evaluation is partial:** 27 of the 40 questions so far, so the guardrail traps and most guide
+  questions are not yet scored.
 - **Prices and rents are borough averages,** not street level, and crime rates per resident
   overstate the risk in central areas full of visitors. The answers say so.
 
 ## What's next
 
-- **Evaluation:** 40 new test questions scored for accuracy, faithfulness to the tool results and
-  helpfulness, comparing models and settings, logged in MLflow.
-- **Monitoring:** logging tools called, tokens and latency per chat, with per-user rate limits.
-- **Freshness:** a monthly GitHub Action to re-download crime, prices and rents, rebuild, test and
-  deploy.
+- **Run the rest of the evaluation:** the 13 traps, guide questions and follow-ups.
+- **Close the transport gap:** add the lines serving each station to the data, so the model has the
+  facts instead of guessing them.
+- **Compare paid models** (Claude Haiku, GPT-5 mini) on the same questions for accuracy and cost.
 
 ---
 
@@ -371,14 +453,19 @@ src/london_property/
     tools.py            the tools the chatbot calls
     area_data.py        builds the area tables from the raw data
     guide_data.py       downloads the GOV.UK guides
+    refresh.py          monthly refresh of crime, prices, rents and guides
+    evaluate.py         evaluation questions, code scoring, MLflow logging
+    judge.py            the LLM judge
     drift.py            PSI calculation and retrain decision
 streamlit/              main.py (entry), chat_app.py, map_app.py, app.py
-tests/                  65 tests
+eval/                   questions.jsonl, the 40 evaluation questions
+reports/eval/           saved answers, scores and verdicts for each run
+tests/                  72 tests
 models/                 trained model bundle
 data/
     processed/area/     the tables the API loads
     reference/          training distribution used for drift comparison
     drift/              new data, committing here triggers the drift workflow
-.github/workflows/      tests.yml, drift.yml
+.github/workflows/      tests.yml, drift.yml, refresh.yml
 Dockerfile
 ```
