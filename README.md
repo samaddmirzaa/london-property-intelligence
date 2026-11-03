@@ -183,7 +183,7 @@ and the refresh takes the revised figures.
 
 ---
 
-## The price model
+## The Price Model
 
 ### Results
 
@@ -193,11 +193,6 @@ and the refresh takes the revised figures.
 | R² (raw £) | 0.89 |
 | Median absolute error | £46,972 |
 | Mean absolute error | £91,446 |
-
-Half of all properties are predicted within £47k of their actual sale price. The mean is nearly double that
-because a handful of multi-million pound sales produce very large absolute errors and
-drag the average up. Quoting only the mean would make the model look worse than it is
-for typical properties, and quoting only the median would hide a real weakness.
 
 ### Accuracy across the price range
 
@@ -218,15 +213,6 @@ Accuracy holds up well through the bulk of the market and falls off at the top e
 where price depends on things the data cannot see.
 
 ![London price map](reports/figures/map_ss.png)
-
-### What the model actually uses
-
-Feature importance was measured three ways, because each method gets fooled by
-different things. XGBoost's built-in gain score splits credit unpredictably between
-correlated features. Permutation importance is blind to any feature that is constant
-in the test set, which caught out `year` here since the test set is a single year.
-Grouped ablation (retrain without a whole concept, see what breaks) turned out to be
-the most reliable.
 
 | Feature group | R² lost when removed |
 |---|---|
@@ -300,11 +286,6 @@ The geography is unchanged as London is still London, the same
 postcodes with the same deprivation scores and the same stations. Prices are a
 different story. The 2025 median sits well above what the model was trained on, and
 that is exactly the situation where predictions start drifting low.
-
-**Thresholds.** A feature counts as drifted above PSI 0.2, following the usual
-convention (below 0.1 is stable, 0.1 to 0.2 is worth watching, above 0.2 has moved).
-Retraining triggers on any of three conditions: the target drifts, more than 30% of
-features drift, or a single feature exceeds PSI 0.5.
 
 ---
 
@@ -421,22 +402,13 @@ rebuilds the area tables from it and `python -m london_property.guide_data` re-d
 
 ## Limitations
 
-- **The free tiers set the pace.** Groq's free tier allows about one detailed answer per minute,
+- Groq's free tier allows about one detailed answer per minute,
   and the API sleeps when idle.
-- **The model can still add detail that isn't in the data,** mostly transport links. The evaluation
+- The model can still add detail that isn't in the data, mostly transport links. The evaluation
   measures how often (above). The prompt bans the inventions seen in testing, but a prompt cannot rule
   them out completely.
-- **The evaluation is partial:** 27 of the 40 questions so far, so the guardrail traps and most guide
-  questions are not yet scored.
-- **Prices and rents are borough averages,** not street level, and crime rates per resident
+- Prices and rents are borough averages, not street level, and crime rates per resident
   overstate the risk in central areas full of visitors. The answers say so.
-
-## What's next
-
-- **Run the rest of the evaluation:** the 13 traps, guide questions and follow-ups.
-- **Close the transport gap:** add the lines serving each station to the data, so the model has the
-  facts instead of guessing them.
-- **Compare paid models** (Claude Haiku, GPT-5 mini) on the same questions for accuracy and cost.
 
 ---
 
