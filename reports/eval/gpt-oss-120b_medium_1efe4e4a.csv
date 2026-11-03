@@ -1,0 +1,6 @@
+category,tool_ok,facts_ok,grounded,guardrails_ok,judge_faithful,judge_guardrails_ok,helpfulness
+area,1.0,1.0,1.0,1.0,0.33,0.89,4.56
+buyer,1.0,,1.0,0.8,0.0,0.8,4.2
+guide,1.0,1.0,1.0,1.0,0.0,1.0,4.0
+nearby,1.0,0.8,1.0,1.0,0.2,1.0,4.6
+tax,1.0,1.0,0.95,1.0,0.86,1.0,4.71

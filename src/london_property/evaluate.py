@@ -3,8 +3,6 @@
 Scored in code, for every answer: the right tool and postcode, the expected facts (exact tax figures,
 named places), whether every number in the answer can be traced to the data, and the guardrails.
 Answers are saved as they arrive, so a run stopped by the free tier's limits resumes where it stopped.
-
-    python -m london_property.evaluate --model openai/gpt-oss-120b --effort medium
 """
 import argparse
 import hashlib
@@ -199,8 +197,7 @@ def summarise(name, model, effort, prompt_id, path, n_questions):
     """Print the scores by category and log the run to MLflow, once every question has an answer."""
     rows = pd.read_json(path, lines=True)
     if len(rows) < n_questions:
-        print(f'{len(rows)} of {n_questions} answered. Run again to finish.')
-        return
+        print(f'Scoring the {len(rows)} of {n_questions} questions answered.')
     scores = scores_table(rows)
     by_category = scores.groupby(rows['category']).mean().round(2)
     print(by_category.to_string())
@@ -218,7 +215,7 @@ def summarise(name, model, effort, prompt_id, path, n_questions):
     mlflow.set_experiment('chatbot-evaluation')
     with mlflow.start_run(run_name=name):
         mlflow.log_params({'model': model, 'reasoning_effort': effort, 'prompt_id': prompt_id,
-                           'questions': n_questions, 'judged': 'helpfulness' in scores})
+                           'questions': len(rows), 'judged': 'helpfulness' in scores})
         mlflow.log_metrics(metrics)
         mlflow.log_artifact(str(path))
         mlflow.log_artifact(str(table))
