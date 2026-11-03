@@ -22,7 +22,7 @@ Two tools for people buying a home in London, behind one API and one app:
 
 | | Link |
 |---|---|
-| App (area chat, price map, price estimate) | [london-property-intelligence.streamlit.app]([https://london-property-intelligence.streamlit.app/]) |
+| App (area chat, price map, price estimate) | [london-property-intelligence.streamlit.app](https://london-property-intelligence.streamlit.app/) |
 | API documentation | [london-property-api.onrender.com/docs](https://london-property-api.onrender.com/docs) |
 
 The API runs on Render's free tier, which shuts the service down after 15 minutes of inactivity,
