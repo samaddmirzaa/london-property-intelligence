@@ -8,11 +8,11 @@
 
 Two tools for people buying a home in London, behind one API and one app:
 
-- **An area chatbot** that tells you what living at a specific postcode is actually like: what is
-  within a 10-minute walk, the nearest schools and their latest Ofsted results, transport, air
-  quality, crime, prices, rents and council tax, every figure compared with the rest of London. It
+- **An Area Chatbot** that tells you what living at a specific postcode is actually like: what is
+  within a 10-minute walk, the nearest schools and their latest Office for Standards in Education (Ofsted results),
+  transport, air quality, crime, prices, rents and council tax, every figure compared with the rest of London. It
   also answers how-to questions (leasehold, stamp duty, conveyancing, shared ownership) from the
-  official GOV.UK guides. Every fact comes from public data through tools; the language model only
+  official guides. Every fact comes from public data and the language model only
   writes the sentences. Its answers are evaluated with code checks and an LLM judge, and its data
   refreshes itself every month.
 - **A house price model** trained on 1.4 million EPC-linked Land Registry sales, scoring R² 0.89 with
@@ -39,12 +39,10 @@ Groq's free tier, which allows roughly one detailed answer per minute.
 
 ### What it does
 
-Ask "What's it like living around E15 4EJ?" and the answer opens with the character of that exact
-location, built from whatever is furthest from typical for London: more GPs within a 10-minute walk
-than 94% of London postcodes, fewer older residents and more private renters than most wards, a
-girls-only secondary school 161 m away. It then covers day-to-day life, getting around, schools, green space, safety, environment and
-costs, tailored to the buyer (families, commuters, first-time buyers), and ends with a short list of
-things the data cannot tell you, such as noise or the street at night. Every answer names its sources
+Ask "What's it like living around a certain Postcode?" and the answer opens with the character of that exact
+location, built from whatever is furthest from typical for London. It then covers day-to-day life, getting around, 
+schools, green space, safety, environment and costs, tailored to the buyer (families, commuters, first-time buyers), 
+and ends with a short list of things the data cannot tell you, such as noise or the street at night. Every answer names its sources
 and periods.
 
 ### How it works
@@ -52,36 +50,36 @@ and periods.
 The model never states facts about a place from memory. It is given a menu of tools, decides which
 to call, my code runs them against the processed data, and the model writes the answer from the
 results. This is tool calling with a short hand-written agent loop (capped at 5 rounds), not a
-framework such as LangChain: the loop is about 20 lines, and owning it keeps every step testable.
+framework such as LangChain. The loop is about 20 lines and testable.
 
 | Tool | What it returns |
 |---|---|
 | `get_neighbourhood` | One-call overview of a postcode: location facts, ward crime, ages and tenure, borough prices, rents and council tax, counts of 17 kinds of places within a 10-minute walk, the nearest essentials, and what is unusually high or low compared with London |
 | `find_nearby` | Places of one type near a postcode (a chain, a cuisine, a school phase), nearest first |
 | `council_tax` | The 2026-27 bill for any band in the postcode's borough |
-| `stamp_duty` | Stamp Duty Land Tax band by band, with first-time buyer relief and surcharges (rates verified on GOV.UK) |
+| `stamp_duty` | Stamp Duty Land Tax band by band, with first-time buyer relief and surcharges |
 | `get_guide` | The best-matching sections of 12 GOV.UK buyer guides, with links |
 
-**The code does the comparing, the model does the meaning.** Language models are unreliable at
-arithmetic, so every comparison is computed before the model sees it: each ward measure comes with
+The code does the comparing and the model does the meaning. Language models can be unreliable 
+so every comparison is computed before the model sees it: each ward measure comes with
 its percentile among London's 704 wards, each walk count with its percentile among a benchmark of
 5,000 random London postcodes, and borough prices and rents with their percentage difference from
 London. The overview also lists, by direction, the measures that are higher or lower than most of
 London, because an early version that mixed them in one list was read the wrong way round.
 
-**Retrieval was measured, not assumed.** For the GOV.UK guides I labelled 19 realistic buyer
+Retrieval was measured, not assumed. For the GOV.UK guides I labelled 19 realistic buyer
 questions with the section that actually answers them. Searching all 76 sections with TF-IDF put the
 right one in the top two for 16 of 19, and could not tell off-topic questions from real ones.
 Letting the model pick the guide first (12 clear choices) and TF-IDF rank the sections within it
 scored 19 of 19. With 76 short passages a vector database would add memory and cost for no measured
 gain, so there isn't one.
 
-**Grounding and guardrails.** The system prompt explains every field the tools return, bans the
+The system prompt explains every field the tools return, bans the
 kinds of detail the model tended to invent in testing (train lines, journey times, school
 reputations, policing), describes places rather than people, never labels an area safe or
 dangerous, and adds the caveats that matter: per-resident crime rates are inflated where visitors
-outnumber residents, flood zones ignore defences, prices are borough-wide. Tool errors (an unknown
-postcode, a bad argument) go back to the model as text so it can correct itself or explain.
+outnumber residents, flood zones ignore defences, prices are borough-wide. Tool errors
+go back to the model as text so it can correct itself or explain.
 
 ### Evaluation
 
