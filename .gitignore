@@ -19,4 +19,4 @@ notebooks/mlruns/
 .idea/
 .DS_Store
 
-.streamlit/secrets.toml
+.streamlit/secrets.tomldrift_report.json
