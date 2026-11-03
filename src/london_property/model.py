@@ -8,10 +8,6 @@ project_root = Path(__file__).resolve().parents[2]
 model_path = project_root /'models'/'price_model.joblib'
 postcode_path = project_root/'data'/'supplementary'/'postcodes_london.parquet'
 
-# Defining the Option Strings
-property_types = ['Flat', 'Terraced', 'Semi-Detached', 'Detached']
-tenures = ['Freehold', 'Leasehold']
-
 # Loaders for the Model and Postcode reference
 def load_bundle():
     return joblib.load(model_path)
@@ -58,9 +54,3 @@ def find_postcode(postcodes, postcode):
     if match.empty:
         return None
     return match.iloc[0]
-
-
-def nearest_postcode(postcodes, lat, lon):
-    d = (postcodes['lat'] - lat) ** 2 + (postcodes['lon'] - lon) ** 2
-    return postcodes.loc[d.idxmin()]
-

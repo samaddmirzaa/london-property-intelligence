@@ -1,3 +1,5 @@
+import json
+import logging
 from types import SimpleNamespace
 
 import httpx
@@ -13,7 +15,7 @@ groq_request = httpx.Request('POST', 'https://api.groq.com/openai/v1/chat/comple
 
 def use_llm(monkeypatch, llm):
     """Swap the real Groq LLM for a fake one for this test only."""
-    monkeypatch.setattr(api, 'get_llm', lambda: llm)
+    monkeypatch.setattr(api, 'make_llm', lambda usage: llm)
 
 
 def test_chat(monkeypatch):
@@ -44,3 +46,12 @@ def test_chat_llm_errors(monkeypatch, error, status):
     use_llm(monkeypatch, failing_llm)
     response = client.post('/chat', json={'messages': [{'role': 'user', 'content': 'What is E8 3RL like?'}]})
     assert response.status_code == status
+
+
+def test_chat_is_logged_without_text(monkeypatch, caplog):
+    caplog.set_level(logging.INFO, logger='uvicorn.error')
+    use_llm(monkeypatch, lambda messages: SimpleNamespace(content='A quiet street.', tool_calls=None))
+    client.post('/chat', json={'messages': [{'role': 'user', 'content': 'My address is 12 Secret Road'}]})
+    entry = json.loads(caplog.records[-1].getMessage())
+    assert entry['event'] == 'chat' and entry['status'] == 200 and entry['tools'] == []
+    assert 'Secret Road' not in caplog.text

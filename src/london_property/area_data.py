@@ -185,8 +185,6 @@ def build_ward_profile(pc, wards, lookup):
     loc_cols = ['ptal_ai', 'no2', 'pm25', 'pm10']
     local = pc.groupby('ward_code')[loc_cols].mean()
     local.loc[london] = pc[loc_cols].mean()
-    local['ptal_band'] = pd.cut(local['ptal_ai'], bins=[0, 0.01, 2.5, 5, 10, 15, 20, 25, 40, float('inf')],
-                                labels=['0', '1a', '1b', '2', '3', '4', '5', '6a', '6b'], right=False).astype(str)
     profile = profile.join(local.round({'ptal_ai': 1, 'no2': 1, 'pm25': 1, 'pm10': 1}))
 
     # Borough house prices: latest month of the UK House Price Index

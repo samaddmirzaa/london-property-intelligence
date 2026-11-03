@@ -1,8 +1,8 @@
 import json
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
-import os
 
 project_root = Path(__file__).resolve().parents[2]
 reference_path = project_root / 'data' / 'reference' / 'training_reference.parquet'
@@ -81,17 +81,8 @@ def main():
     print(f'\nDecision: {"RETRAIN" if retrain else "NO RETRAIN"} - {reason}')
 
     report = {'scores': scores, 'retrain': retrain, 'reason': reason}
-    Path(project_root / 'drift_report.json').write_text(json.dumps(report, indent=2))
-
-    github_output = os.environ.get('GITHUB_OUTPUT')
-    if github_output:
-        with open(github_output, 'a') as f:
-            f.write(f'retrain={str(retrain).lower()}\n')
-            f.write(f'reason={reason}\n')
-
-    return retrain
+    (project_root/'drift_report.json').write_text(json.dumps(report, indent=2))
 
 
 if __name__ == '__main__':
     main()
-

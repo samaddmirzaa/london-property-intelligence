@@ -106,7 +106,6 @@ def score(q, result, tools, prompt_numbers):
         'grounded': round(1 - len(ungrounded) / len(in_answer), 3) if in_answer else None,
         'ungrounded': ungrounded,
         'guardrails_ok': not labels.search(answer),
-        'words': len(answer.split()),
     }
 
 
@@ -182,17 +181,19 @@ def rescore(model, effort):
             f.write(json.dumps(row, ensure_ascii=False) + '\n')
     summarise(name, model, effort, prompt_id, path, len(questions))
 
+
 def scores_table(rows):
     """One row of scores per answer: the code checks, plus the judge's verdicts once every answer is judged."""
     scores = rows[['tool_ok', 'facts_ok', 'grounded', 'guardrails_ok']].astype(float)
     judged = 'judge' in rows and rows['judge'].notna().all()
-    if judged and rows['judge'].map(lambda v: v.get('judge_id')).nunique() == 1:  # every verdict, one judge prompt
+    if judged and rows['judge'].map(lambda v: v.get('judge_id')).nunique() == 1:    # every verdict, one judge prompt
         verdicts = pd.DataFrame(rows['judge'].tolist())
         problems = verdicts['unsupported_claims'].str.len() + verdicts['contradictions'].str.len()
         scores['judge_faithful'] = (problems == 0).astype(float)
         scores['judge_guardrails_ok'] = (verdicts['guardrail_breaches'].str.len() == 0).astype(float)
         scores['helpfulness'] = verdicts['helpfulness'].astype(float)
     return scores
+
 
 def summarise(name, model, effort, prompt_id, path, n_questions):
     """Print the scores by category and log the run to MLflow, once every question has an answer."""

@@ -4,17 +4,6 @@ from london_property.api import app
 client = TestClient(app)
 
 
-def test_area_profile():
-    response = client.get('/area/sw1a1aa')
-    assert response.status_code == 200
-    assert response.json()['location']['borough_name'] == 'Westminster'
-
-
-def test_area_unknown_postcode():
-    response = client.get('/area/ZZ69 69ZZ')
-    assert response.status_code == 404
-    assert 'not a live London postcode' in response.json()['detail']
-
 def test_neighbourhood():
     response = client.get('/neighbourhood/N16 0UD')
     assert response.status_code == 200

@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
-from scipy.spatial import cKDTree
 from scipy.sparse import csr_matrix
 from scipy.spatial import cKDTree
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -117,16 +116,6 @@ def lookup_postcode(data, postcode):
         raise PostcodeNotFound(f'{postcode} is not a live London postcode')
     return key, data.postcodes.loc[key]
 
-
-def get_area_profile(data, postcode):
-    """Everything known about a postcode's exact location and its ward, with London averages to compare."""
-    key, pc = lookup_postcode(data, postcode)
-    return {
-        'postcode': key,
-        'location': to_plain(pc),
-        'ward': to_plain(data.profile.loc[pc['ward_code']]),
-        'london_average': to_plain(data.profile.loc[london].drop(['ward_name', 'borough_code', 'borough_name'])),
-    }
 
 def find_nearby(data, postcode, place_type, radius_m=1000, limit=5, subtype=None):
     """Places of one type within a radius of a postcode, nearest first, with a total count."""

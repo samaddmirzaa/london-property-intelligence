@@ -1,5 +1,6 @@
+import json
 import logging
-from functools import cache
+import time
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
@@ -9,7 +10,7 @@ from pydantic import BaseModel, Field
 from london_property.agent import chat, make_llm, make_tools
 from london_property.model import load_bundle, load_postcodes, find_postcode, predict_price
 from london_property.tools import (
-    PostcodeNotFound, load_area_data, get_area_profile, get_neighbourhood, find_nearby, get_guide, council_tax,
+    PostcodeNotFound, load_area_data, get_neighbourhood, find_nearby, get_guide, council_tax,
     stamp_duty
 )
 
@@ -50,12 +51,6 @@ class ChatResponse(BaseModel):
     tools_used: list[dict]
 
 
-@cache
-def get_llm():
-    """The LLM, created on first use, so the API and its tests can start without a Groq key."""
-    return make_llm()
-
-
 def run_tool(tool, *args):
     """Run an area tool, turning its errors into HTTP errors: unknown postcode -> 404, bad input -> 422."""
     try:
@@ -94,12 +89,6 @@ def predict(request: PropertyRequest):
         postcode=row['postcode'],
         district=row['postcode'].split(' ')[0]
     )
-
-
-@app.get('/area/{postcode}')
-def area_profile(postcode: str):
-    """Location facts, ward profile and London averages for a postcode."""
-    return run_tool(get_area_profile, area, postcode)
 
 
 @app.get('/neighbourhood/{postcode}')
@@ -143,10 +132,20 @@ def chat_endpoint(request: ChatRequest):
     """Ask the area chatbot. Send the whole conversation each time: the API keeps no memory between requests."""
     if request.messages[-1].role != 'user':
         raise HTTPException(status_code=422, detail='The last message must be from the user')
+    usage, tools_used, status, start = [], [], 500, time.perf_counter()
     try:
-        return chat([m.model_dump() for m in request.messages], area_tools, get_llm())
+        # A new LLM function per request, so each request counts its own tokens even when requests overlap
+        result = chat([m.model_dump() for m in request.messages], area_tools, make_llm(usage=usage))
+        tools_used, status = [t['tool'] for t in result['tools_used']], 200
+        return result
     except RateLimitError:
+        status = 429
         raise HTTPException(status_code=429, detail='The chatbot is busy. Please try again in a minute.')
     except GroqError:
+        status = 503
         log.exception('LLM call failed')
         raise HTTPException(status_code=503, detail='The chatbot is unavailable right now. Please try again later.')
+    finally:
+        # One line per chat for monitoring: what happened, never what the user wrote
+        log.info(json.dumps({'event': 'chat', 'status': status, 'tools': tools_used, 'tokens': sum(usage),
+                             'latency_s': round(time.perf_counter() - start, 2), 'messages': len(request.messages)}))

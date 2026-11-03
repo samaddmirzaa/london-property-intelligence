@@ -2,7 +2,7 @@ import pytest
 import pandas as pd
 
 from london_property.tools import (
-    load_area_data, normalise_postcode, get_area_profile, get_neighbourhood, find_nearby, get_guide, council_tax,
+    load_area_data, normalise_postcode, get_neighbourhood, find_nearby, get_guide, council_tax,
     stamp_duty, london_percentile, place_types, walk_m
 )
 
@@ -17,17 +17,9 @@ def test_normalise_postcode():
     assert normalise_postcode(' sw1a 1aa ') == 'SW1A 1AA'
 
 
-def test_area_profile(data):
-    result = get_area_profile(data, 'sw1a1aa')
-    assert result['postcode'] == 'SW1A 1AA'
-    assert result['location']['borough_name'] == 'Westminster'
-    assert result['ward']['ward_name'] == result['location']['ward_name']
-    assert result['london_average']['population'] > 8_000_000
-
-
 def test_unknown_postcode(data):
     with pytest.raises(ValueError):
-        get_area_profile(data, 'ZZ69 69ZZ')
+        get_neighbourhood(data, 'ZZ69 69ZZ')
 
 def test_find_nearby(data):
     result = find_nearby(data, 'N16 0UD', 'park', radius_m=1000, limit=100)
