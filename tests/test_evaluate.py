@@ -20,8 +20,8 @@ def call(tool, arguments):
 
 
 def test_numbers():
-    text = 'Band D is £1,944, 26% vs 21.2, £390k, £1.2m, 1.5 million. E15 4EJ, PM2.5, 800 m, 3 schools.'
-    assert numbers(text) == [1944, 26, 21.2, 390_000, 1_200_000, 1_500_000, 800]
+    text = 'Band D is £1,944, 26% vs 21.2, £390k, £1.2m, 1.5 million. E15 4EJ, PM2.5, 800 m, 3 schools, £1\u202f967.26'
+    assert numbers(text) == [1944, 26, 21.2, 390_000, 1_200_000, 1_500_000, 800, 1967.26]
 
 
 def test_tool_ok():

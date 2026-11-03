@@ -179,6 +179,11 @@ def get_neighbourhood(data, postcode):
     high = ranks[ranks >= 80].sort_values(ascending=False).head(8)
     low = ranks[ranks <= 20].sort_values().head(8)
 
+    # Coordinates and codes dropped (the LLM doesn't need them); station distance in metres like every other
+    location = pc.drop(['lat', 'lon', 'easting', 'northing', 'lsoa_code', 'ward_code', 'borough_code', *location_cols])
+    location = location.rename({'station_km': 'station_m'})
+    location['station_m'] = round(location['station_m'] * 1000)
+
     nearest = {}
     for label, (place_type, subtype) in essentials.items():
         found = find_nearby(data, key, place_type, max_radius_m, 1, subtype)['nearest']
@@ -186,8 +191,7 @@ def get_neighbourhood(data, postcode):
 
     return {
         'postcode': key,
-        'location': to_plain(pc.drop(['lat', 'lon', 'easting', 'northing', 'lsoa_code', 'ward_code', 'borough_code',
-                                      *location_cols])),
+        'location': to_plain(location),
         'ward': to_plain(ward[['ward_name', 'borough_name', 'population', 'households',
                                'crime_months', 'price_month', 'rent_month']]),
         'higher_than_most_of_london': to_plain(high),
@@ -241,8 +245,8 @@ def stamp_duty(price, first_time_buyer=False, additional_property=False, non_uk_
     for upper, rate in bands:
         if price > lower:
             band_tax = (min(price, upper) - lower) * (rate + surcharge)
-            breakdown.append({'from': lower, 'to': min(price, upper), 'rate_pct': round((rate + surcharge) * 100),
-                              'tax': round(band_tax)})
+            breakdown.append({'from': lower, 'to': min(price, upper), 'amount': min(price, upper) - lower,
+                              'rate_pct': round((rate + surcharge) * 100), 'tax': round(band_tax)})
             tax += band_tax
         lower = upper
 

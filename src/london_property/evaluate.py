@@ -22,9 +22,11 @@ questions_file = project_root/'eval'/'questions.jsonl'
 results_dir = project_root/'reports'/'eval'
 tokens_per_minute = 8000    # Groq free tier for gpt-oss-120b
 
-# A number, with an optional £ in front and an optional k / m / million after it. The look-arounds skip
-# digits inside words, so postcodes (E15 4EJ), PM2.5 and field names (pct_age_0_14) are not counted.
-number = re.compile(r'(?<![\w.])(£)?(\d[\d,]*(?:\.\d+)?)\s?(million|k|m)?(?!\w)', re.IGNORECASE)
+# A number, with an optional £ in front and an optional k / m / million after it. Thousands may be separated
+# by commas or by the narrow no-break space gpt-oss uses (£1 967). The look-arounds skip digits inside words,
+# so postcodes (E15 4EJ) and PM2.5 are not counted.
+number = re.compile(r'(?<![\w.])(£)?((?:\d{1,3}(?:[,\u202f\u00a0]\d{3})+|\d+)(?:\.\d+)?)\s?(million|k|m)?(?!\w)',
+                    re.IGNORECASE)
 labels = re.compile(r'\b(safe|unsafe|dangerous)\b', re.IGNORECASE)
 
 
@@ -33,7 +35,7 @@ def numbers(text):
     they are mostly list numbers, bands and zones, which say nothing about faithfulness."""
     found = []
     for pound, digits, scale in number.findall(text):
-        value = float(digits.replace(',', ''))
+        value = float(re.sub(r'[,\u202f\u00a0]', '', digits))
         scale = scale.lower()
         if scale == 'million' or (pound and scale == 'm'):
             value *= 1_000_000
@@ -79,18 +81,25 @@ def facts_ok(q, answer, in_answer):
             and all(text.lower() in answer.lower() for text in q['expect_text']))
 
 
-def score(q, result, tools, prompt_numbers):
-    """Everything that can be checked in code about one answer."""
-    answer, used = result['answer'], result['tools_used']
+def tool_data(tools, used):
+    """The data an answer was based on. The tools are deterministic, so re-running its calls reproduces it."""
     data = []
-    for call in used:    # the tools are deterministic, so re-running them shows the data the answer saw
+    for call in used:
         try:
             data.append(tools[call['tool']](**arguments(call)))
         except (KeyError, TypeError, ValueError):
             pass
-    allowed = numbers(json.dumps(data, ensure_ascii=False)) + numbers(json.dumps(q['messages'])) + prompt_numbers
+    return data
+
+
+def score(q, result, tools, prompt_numbers):
+    """Everything that can be checked in code about one answer."""
+    answer, used = result['answer'], result['tools_used']
+    # Underscores become spaces so numbers in field names count too (pct_age_65_plus -> 65)
+    data_text = json.dumps(tool_data(tools, used), ensure_ascii=False).replace('_', ' ')
+    allowed = numbers(data_text) + numbers(json.dumps(q['messages'], ensure_ascii=False)) + prompt_numbers
     in_answer = numbers(answer)
-    ungrounded = [n for n in in_answer if not matches(n, allowed, 0.01)]
+    ungrounded = [n for n in in_answer if not matches(n, allowed, 0.02)]
     return {
         'tool_ok': tool_ok(q, used),
         'facts_ok': facts_ok(q, answer, in_answer),
@@ -121,9 +130,15 @@ def ask(q, tools, llm):
     return None, None
 
 
-def run(model, effort):
+def run_name(model, effort):
+    """The run's name: model, reasoning effort and a fingerprint of the system prompt, so results from
+    different prompts never mix."""
     prompt_id = hashlib.sha256(system_prompt.encode()).hexdigest()[:8]
-    name = f"{model.split('/')[-1]}_{effort}_{prompt_id}"
+    return f"{model.split('/')[-1]}_{effort}_{prompt_id}", prompt_id
+
+
+def run(model, effort):
+    name, prompt_id = run_name(model, effort)
     path = results_dir/f'{name}.jsonl'
     results_dir.mkdir(parents=True, exist_ok=True)
     done = {json.loads(line)['id'] for line in path.open(encoding='utf-8')} if path.exists() else set()
@@ -153,20 +168,45 @@ def run(model, effort):
     summarise(name, model, effort, prompt_id, path, len(questions))
 
 
+def rescore(model, effort):
+    """Recompute the scores of saved answers with the current questions and scoring, without calling the model."""
+    name, prompt_id = run_name(model, effort)
+    path = results_dir/f'{name}.jsonl'
+    questions = {q['id']: q for q in load_questions()}
+    tools = make_tools(load_area_data())
+    prompt_numbers = numbers(system_prompt)
+    rows = [json.loads(line) for line in path.open(encoding='utf-8')]
+    with path.open('w', encoding='utf-8') as f:
+        for row in rows:
+            row.update(score(questions[row['id']], row, tools, prompt_numbers))
+            f.write(json.dumps(row, ensure_ascii=False) + '\n')
+    summarise(name, model, effort, prompt_id, path, len(questions))
+
+def scores_table(rows):
+    """One row of scores per answer: the code checks, plus the judge's verdicts once every answer is judged."""
+    scores = rows[['tool_ok', 'facts_ok', 'grounded', 'guardrails_ok']].astype(float)
+    if 'judge' in rows and rows['judge'].notna().all():
+        verdicts = pd.DataFrame(rows['judge'].tolist())
+        problems = verdicts['unsupported_claims'].str.len() + verdicts['contradictions'].str.len()
+        scores['judge_faithful'] = (problems == 0).astype(float)
+        scores['judge_guardrails_ok'] = (verdicts['guardrail_breaches'].str.len() == 0).astype(float)
+        scores['helpfulness'] = verdicts['helpfulness'].astype(float)
+    return scores
+
 def summarise(name, model, effort, prompt_id, path, n_questions):
     """Print the scores by category and log the run to MLflow, once every question has an answer."""
     rows = pd.read_json(path, lines=True)
     if len(rows) < n_questions:
         print(f'{len(rows)} of {n_questions} answered. Run again to finish.')
         return
-    scores = rows[['tool_ok', 'facts_ok', 'grounded', 'guardrails_ok']].astype(float)
+    scores = scores_table(rows)
     by_category = scores.groupby(rows['category']).mean().round(2)
     print(by_category.to_string())
 
     metrics = scores.mean().round(3).rename({'tool_ok': 'tool_accuracy', 'facts_ok': 'fact_accuracy',
                                              'grounded': 'number_grounding', 'guardrails_ok': 'guardrail_pass'})
-    metrics = {**metrics.to_dict(), 'median_latency_s': float(rows['latency_s'].median()),
-               'mean_tokens': round(rows['tokens'].mean())}
+    metrics = {**metrics.to_dict(), 'fully_grounded': round(float((rows['grounded'].dropna() == 1).mean()), 3),
+               'median_latency_s': float(rows['latency_s'].median()), 'mean_tokens': round(rows['tokens'].mean())}
     print(metrics)
     table = path.with_suffix('.csv')
     by_category.to_csv(table)
@@ -176,7 +216,7 @@ def summarise(name, model, effort, prompt_id, path, n_questions):
     mlflow.set_experiment('chatbot-evaluation')
     with mlflow.start_run(run_name=name):
         mlflow.log_params({'model': model, 'reasoning_effort': effort, 'prompt_id': prompt_id,
-                           'questions': n_questions})
+                           'questions': n_questions, 'judged': 'helpfulness' in scores})
         mlflow.log_metrics(metrics)
         mlflow.log_artifact(str(path))
         mlflow.log_artifact(str(table))
@@ -186,8 +226,12 @@ def main():
     parser = argparse.ArgumentParser(description='Evaluate the chatbot on eval/questions.jsonl')
     parser.add_argument('--model', default=model_name)
     parser.add_argument('--effort', default=reasoning_effort, choices=['low', 'medium', 'high'])
+    parser.add_argument('--rescore', action='store_true', help='re-score saved answers without calling the model')
     args = parser.parse_args()
-    run(args.model, args.effort)
+    if args.rescore:
+        rescore(args.model, args.effort)
+    else:
+        run(args.model, args.effort)
 
 
 if __name__ == '__main__':
