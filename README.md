@@ -27,6 +27,7 @@ Two tools for people buying a home in London, behind one API and one app:
 | App (area chat, price map, price estimate) | [london-property-intelligence.streamlit.app](https://london-property-intelligence.streamlit.app/) |
 | API documentation | [london-property-api.onrender.com/docs](https://london-property-api.onrender.com/docs) |
 
+Please be patient with the Streamlit app page as the demo runs on free hosting.
 The API runs on Render's free tier, which shuts the service down after 15 minutes of inactivity,
 so the first request can take 30 to 60 seconds while the container starts. The chatbot runs on
 Groq's free tier, which allows roughly one detailed answer per minute.
