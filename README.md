@@ -22,7 +22,7 @@ Two tools for people buying a home in London, behind one API and one app:
 
 ## Live demo
 
-| | Link |
+| | |
 |---|---|
 | App (area chat, price map, price estimate) | [london-property-intelligence.streamlit.app](https://london-property-intelligence.streamlit.app/) |
 | API documentation | [london-property-api.onrender.com/docs](https://london-property-api.onrender.com/docs) |
