@@ -104,10 +104,6 @@ area wealth matter most (R² drops 0.22), then year of sale (0.19) and size (0.1
 - **Model.** XGBoost, picked over Ridge and Random Forest baselines. Experiments are tracked in MLflow and
   explained with SHAP.
 
-**Drift monitoring.** Markets change, so a workflow compares new data with the training data using the Population
-Stability Index and decides whether to retrain. On 84,310 London sales from 2025, location and property features
-were stable, but price had drifted (PSI 0.262, against a 0.2 threshold), so it recommended retraining.
-
 ---
 
 ## How it fits together
@@ -124,10 +120,6 @@ were stable, but price had drifted (PSI 0.262, against a 0.2 threshold), so it r
 
    GitHub Actions: tests on every push · drift check on new data · monthly data refresh
 ```
-
-The `/chat` endpoint checks its input, never logs what users type (people enter addresses), and returns clear
-errors when the model is rate limited or unavailable. Over 70 automated tests run on every push, with no API key
-or network needed because a fake language model stands in for the real one.
 
 **Tech stack:** Python 3.11, pandas, scikit-learn, XGBoost, SHAP, MLflow, GeoPandas, SciPy, Groq (gpt-oss-120b),
 FastAPI, Pydantic, Docker, Streamlit, Folium, pytest, GitHub Actions. Hosted on Render and Streamlit Community Cloud.
@@ -152,8 +144,7 @@ python -m london_property.drift             # drift check
 ```
 
 The chatbot needs a free Groq API key in a `GROQ_API_KEY` environment variable, and the map pages need a CARTO
-key in `.streamlit/secrets.toml`. The processed tables are in the repo. Raw data isn't, but every source is
-public and `python -m london_property.area_data` rebuilds the tables from it.
+key in `.streamlit/secrets.toml`.
 
 ## Limitations
 
