@@ -16,8 +16,10 @@ Two tools for people buying a home in London, served from one API and one web ap
 
 **Try it:** [App](https://london-property-intelligence.streamlit.app/) · [API docs](https://london-property-api.onrender.com/docs)
 
-Both run on free hosting. The API goes to sleep when idle, so the first request can take 30 to 60 seconds.
-The chatbot is limited to roughly one detailed answer per minute.
+Please be patient with the Streamlit app page as the demo runs on free hosting. If something still looks stuck after a few minutes,
+refresh the page once. The API runs on Render's free tier, which shuts the service down after 15 minutes of inactivity,
+so the first request can take 30 to 60 seconds while the container starts. The chatbot runs on
+Groq's free tier, which allows roughly one detailed answer per minute.
 
 ![Area chat](reports/figures/chat_ss.png)
 
