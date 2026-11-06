@@ -37,19 +37,14 @@ The language model never states facts from memory. It chooses from a small set o
 the data, and the model writes the answer from the results. 
 
 Comparisons with London are calculated in code before the model sees them. Crime and census figures are ranked
-across London's 704 wards, and walkable amenities are ranked against 5,000 random London postcodes. That keeps the
-model from getting the maths wrong.
-
-19 realistic buyer questions are labelled with the correct GOV.UK section and two ways tested
-to find it. Searching all 76 sections directly with TF-IDF got the right section in the top two for 16 of 19.
-Letting the model pick one of 12 guides first, then ranking sections inside it, got 19 of 19. 
+across London's 704 wards, and walkable amenities are ranked against 5,000 random London postcodes.  
 
 Test questions were written on postcodes not used while writing the prompt. Each answer is
 checked by code (right tool, right postcode, expected figures, every number traceable to the data) and by a second
 LLM from a different model family that flags unsupported claims. I checked all of that judge's flags by hand:
 19 of 29 were real problems and 10 were judge mistakes.
 
-Results on the 27 questions run so far (the rest are pending because of free-tier token limits):
+Results on the 27 questions run:
 
 | | gpt-oss-120b (live model) | gpt-oss-20b |
 |---|---|---|
@@ -58,14 +53,14 @@ Results on the 27 questions run so far (the rest are pending because of free-tie
 
 The main remaining weakness is that the larger model sometimes adds transport details from general knowledge,
 such as which lines serve a station, which the data doesn't contain. 13 of the 27 answers had at least one small
-unsupported claim. That is why 120b is the live model, and why the limitation is listed below.
+unsupported claim.
 
 **Data.** All public: ONS postcodes, wards and Census 2021, Metropolitan Police crime, Indices of Deprivation 2025,
 TfL accessibility, London air emissions, UK House Price Index and ONS rents, council tax, DfE schools and Ofsted,
 NHS GP practices, Geolytix supermarkets, OS Open Greenspace, Overture Maps places, planning.data.gov.uk, and
 GOV.UK buying guides. A build script turns them into five small tables the API loads at startup.
 
-**Monthly refresh.** A GitHub Action runs on the 25th of each month. It pulls the newest crime, house price and
+**Monthly Refresh.** A GitHub Action runs on the 25th of each month. It pulls the newest crime, house price and
 rent releases and the GOV.UK guides, runs the tests on the new data and commits it, which redeploys the API. If a
 source fails, its last good data is kept.
 
@@ -73,7 +68,7 @@ source fails, its last good data is kept.
 
 ## House Price Model
 
-**What it does.** Takes a postcode plus floor area, property type, tenure and build year, and returns an
+Takes a postcode plus floor area, property type, tenure and build year, and returns an
 estimated sale price.
 
 **Results** (tested on all 2024 sales):
@@ -90,8 +85,6 @@ area wealth matter most (R² drops 0.22), then year of sale (0.19) and size (0.1
 
 ![London price map](reports/figures/map_ss.png)
 
-**How it was built**
-
 - **Data.** 2.81 million Land Registry sales linked to energy certificates (EPCs), cleaned down to 1,411,720
   sales from 2008 to 2024. Removed: pre-2008 sales (unreliable linkage), prices outside £50k to £10M, and floor
   areas outside 15 to 500 m².
@@ -99,14 +92,12 @@ area wealth matter most (R² drops 0.22), then year of sale (0.19) and size (0.1
   location, travel zone, deprivation, local income and distance to the nearest station.
 - **Validation.** Trained on sales up to 2023 and tested on 2024. A random split would let the model learn
   2024 price levels in advance and overstate the score.
-- **Avoiding leakage.** The average price per postcode district is calculated from training data only, and
+- **Avoiding Leakage.** The average price per postcode district is calculated from training data only, and
   smoothed so districts with a few sales don't get extreme values. Missing values are filled the same way.
 - **Model.** XGBoost, picked over Ridge and Random Forest baselines. Experiments are tracked in MLflow and
   explained with SHAP.
 
 ---
-
-## How it fits together
 
 ```
         Streamlit app (area chat · price map · price estimate)
@@ -121,12 +112,12 @@ area wealth matter most (R² drops 0.22), then year of sale (0.19) and size (0.1
    GitHub Actions: tests on every push · drift check on new data · monthly data refresh
 ```
 
-**Tech stack:** Python 3.11, pandas, scikit-learn, XGBoost, SHAP, MLflow, GeoPandas, SciPy, Groq (gpt-oss-120b),
+**Tech Stack:** Python 3.11, pandas, scikit-learn, XGBoost, SHAP, MLflow, GeoPandas, SciPy, Groq (gpt-oss-120b),
 FastAPI, Pydantic, Docker, Streamlit, Folium, pytest, GitHub Actions. Hosted on Render and Streamlit Community Cloud.
 
 ---
 
-## Run it locally
+## Run It Locally
 
 ```bash
 git clone https://github.com/samaddmirzaa/london-property-intelligence
