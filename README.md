@@ -117,26 +117,6 @@ FastAPI, Pydantic, Docker, Streamlit, Folium, pytest, GitHub Actions. Hosted on 
 
 ---
 
-## Run It Locally
-
-```bash
-git clone https://github.com/samaddmirzaa/london-property-intelligence
-cd london-property-intelligence
-
-conda create -n lpi python=3.11
-conda activate lpi
-pip install -r requirements-dev.txt -r requirements-api.txt -r requirements.txt
-pip install -e .
-
-uvicorn london_property.api:app --reload    # API at localhost:8000/docs
-streamlit run streamlit/main.py             # the app (calls the live API)
-pytest tests/ -v                            # tests
-python -m london_property.drift             # drift check
-```
-
-The chatbot needs a free Groq API key in a `GROQ_API_KEY` environment variable, and the map pages need a CARTO
-key in `.streamlit/secrets.toml`.
-
 ## Limitations
 
 - Free hosting means slow first loads and about one chatbot answer per minute.
@@ -145,7 +125,7 @@ key in `.streamlit/secrets.toml`.
 - Prices and rents are borough averages, not street level. Crime per resident looks high in central areas full
   of visitors, and the answers say so.
 
-## Repository layout
+## Repository Layout
 
 ```
 notebooks/              data cleaning, analysis, price model, SHAP, MLflow, area data
